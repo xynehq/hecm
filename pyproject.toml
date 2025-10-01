@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "datasets>=4.1.1",
     "openai>=2.0.0",
+    "python-dotenv>=1.1.1",
     "weave>=0.52.8",
 ]
 
@@ -22,6 +23,8 @@ dev = [
     "ruff>=0.6.9",
     "textual-dev>=1.7.0",
     "openai>=1.108.2",
+    "pyright>=1.1.405",
+    "pynvim>=0.6.0",
 ]
 docs = [
     "mkdocs>=1.6.1",
@@ -59,3 +62,8 @@ select = ["I"]
 known-first-party = ["hecm"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+exclude = [".venv"]
