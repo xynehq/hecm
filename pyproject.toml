@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "datasets>=4.1.1",
+    "dspy>=3.0.3",
+    "gitpython>=3.1.45",
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
     "weave>=0.52.8",
@@ -62,8 +64,3 @@ select = ["I"]
 known-first-party = ["hecm"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
-
-[tool.pyright]
-venvPath = "."
-venv = ".venv"
-exclude = [".venv"]
