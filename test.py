@@ -13,4 +13,5 @@ analyzer = GithubIssueAnalyzer(
     github_token=os.getenv("GITHUB_TOKEN"),
 )
 
-issues = analyzer.fetch_issues(max_issues=100)
+data_points = analyzer.fetch_issues(max_issues=50)
+rich.print(data_points[0])

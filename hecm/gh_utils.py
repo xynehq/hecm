@@ -6,18 +6,29 @@ from pydantic import BaseModel
 from tqdm.auto import tqdm
 
 
+class LinkedPR(BaseModel):
+    number: int
+    title: str
+    body: Optional[str] = None
+    base_commit: str
+    created_at: str
+
+
 class GithubIssue(BaseModel):
     number: int
     title: str
+    body: Optional[str] = None
     state: Literal["open", "closed"]
     url: str
-    linked_pr_numbers: Optional[List[int]] = None
+    linked_pr: Optional[LinkedPR] = None
 
 
 class SWEBenchDataPoint(BaseModel):
     repo: str
-    instance_id: List[str]
-    closed_issues: List[GithubIssue]
+    instance_id: str
+    problem_statement: str
+    patch: str
+    created_at: str
 
 
 class GithubIssueAnalyzer:
@@ -44,6 +55,27 @@ class GithubIssueAnalyzer:
             return [int(item.split("#")[-1]) for item in data]
         except:
             return None
+
+    def fetch_pr_data(self, pr_number: int) -> LinkedPR:
+        url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        pr_data = response.json()
+        return LinkedPR(
+            number=pr_data["number"],
+            title=pr_data["title"],
+            body=pr_data["body"],
+            base_commit=pr_data["base"]["sha"],
+            created_at=pr_data["created_at"],
+        )
+
+    def get_gold_patch(self, pr_number: int) -> str:
+        url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
+        headers = self.headers.copy()
+        headers["Accept"] = "application/vnd.github.v3.diff"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.text
 
     def fetch_issues_by_state(
         self, state: str, max_issues: Optional[int] = None
@@ -81,6 +113,7 @@ class GithubIssueAnalyzer:
                             GithubIssue(
                                 number=issue_number,
                                 title=issue_data["title"],
+                                body=issue_data["body"],
                                 state=issue_data["state"],
                                 url=issue_data["html_url"],
                             )
@@ -99,12 +132,12 @@ class GithubIssueAnalyzer:
 
         return issues
 
-    def fetch_issues(self, max_issues: Optional[int] = None) -> GithubIssuesData:
+    def fetch_issues(self, max_issues: Optional[int] = None) -> List[SWEBenchDataPoint]:
         """
         Fetch all open and closed issues from a GitHub repository using the REST API.
 
         Returns:
-            GithubIssuesData object containing all open and closed issues
+            List[SWEBenchDataPoint] object containing all open and closed issues
         """
         closed_issues = self.fetch_issues_by_state("closed", max_issues)
 
@@ -113,13 +146,22 @@ class GithubIssueAnalyzer:
             desc="Fetching linked PRs",
             total=len(closed_issues),
         ):
-            closed_issues[idx].linked_pr_numbers = self.get_linked_prs(issue.url)
+            linked_pr_numbers = self.get_linked_prs(issue.url)
+            if linked_pr_numbers:
+                closed_issues[idx].linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
 
-        return SWEBenchDataPoint(
-            repo=f"{self.repo_owner}/{self.repo_name}",
-            instance_id=[
-                f"{self.repo_owner}__{self.repo_name}-{issue.number}"
-                for issue in closed_issues
-            ],
-            closed_issues=closed_issues,
-        )
+        data_points: List[SWEBenchDataPoint] = []
+        for issue in closed_issues:
+            if issue.linked_pr:
+                issue_body = issue.body if issue.body else ""
+                data_points.append(
+                    SWEBenchDataPoint(
+                        repo=f"{self.repo_owner}/{self.repo_name}",
+                        instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
+                        problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
+                        patch=self.get_gold_patch(issue.linked_pr.number),
+                        created_at=issue.linked_pr.created_at,
+                    )
+                )
+
+        return data_points
