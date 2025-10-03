@@ -1,3 +1,34 @@
 # HECM
 
 Hollistic evaluation of Coding Models (LLMs)
+
+
+## Installation
+
+```bash
+git clone https://github.com/AthenaAgent/hecm
+cd hecm
+uv pip install -e .
+```
+
+## Usage
+
+```python
+import os
+
+import rich
+from dotenv import load_dotenv
+
+from hecm.gh_utils import GithubIssueAnalyzer
+
+load_dotenv()
+
+analyzer = GithubIssueAnalyzer(
+    repo_owner="juspay",
+    repo_name="hyperswitch",
+    github_token=os.getenv("GITHUB_TOKEN"),
+)
+
+data_points = analyzer.fetch_issues(max_issues=50)
+rich.print(data_points[0])
+```
