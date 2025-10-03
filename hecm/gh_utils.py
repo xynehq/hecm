@@ -1,4 +1,3 @@
-import os
 from typing import List, Literal, Optional
 
 import requests
@@ -11,7 +10,6 @@ class GithubIssue(BaseModel):
     title: str
     state: Literal["open", "closed"]
     url: str
-    comments: List[str] = []
 
 
 class GithubIssuesData(BaseModel):
@@ -21,35 +19,21 @@ class GithubIssuesData(BaseModel):
     closed_issues: List[GithubIssue]
 
 
-def fetch_issues(
-    repo_owner: str,
-    repo_name: str,
-    github_token: Optional[str] = None,
-) -> GithubIssuesData:
-    """
-    Fetch all open and closed issues from a GitHub repository using the REST API.
+class GithubIssueAnalyzer:
+    def __init__(
+        self, repo_owner: str, repo_name: str, github_token: Optional[str] = None
+    ):
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        self.github_token = github_token
+        self.base_url = "https://api.github.com"
+        self.headers = {
+            "Accept": "application/vnd.github.v3+json",
+        }
+        if github_token:
+            self.headers["Authorization"] = f"token {github_token}"
 
-    Args:
-        repo_owner: The owner/organization of the repository
-        repo_name: The name of the repository
-        github_token: Optional GitHub personal access token for authentication (to avoid rate limits)
-
-    Returns:
-        GithubIssuesData object containing all open and closed issues
-    """
-    base_url = "https://api.github.com"
-    headers = {
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    # Add authentication if token is provided
-    if github_token is None:
-        github_token = os.getenv("GITHUB_TOKEN")
-
-    if github_token:
-        headers["Authorization"] = f"token {github_token}"
-
-    def fetch_issues_by_state(state: str) -> List[GithubIssue]:
+    def fetch_issues_by_state(self, state: str) -> List[GithubIssue]:
         """Helper function to fetch issues by state with pagination."""
         issues = []
         page = 1
@@ -57,7 +41,7 @@ def fetch_issues(
 
         with tqdm(desc=f"Fetching {state} issues", unit="page") as pbar:
             while True:
-                url = f"{base_url}/repos/{repo_owner}/{repo_name}/issues"
+                url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/issues"
                 params = {
                     "state": state,
                     "page": page,
@@ -66,7 +50,7 @@ def fetch_issues(
                     "direction": "desc",
                 }
 
-                response = requests.get(url, headers=headers, params=params)
+                response = requests.get(url, headers=self.headers, params=params)
                 response.raise_for_status()
 
                 page_issues = response.json()
@@ -78,20 +62,19 @@ def fetch_issues(
                 # Filter out pull requests (they appear in issues endpoint too)
                 for issue_data in page_issues:
                     if "pull_request" not in issue_data:
+                        issue_number = issue_data["number"]
                         issues.append(
                             GithubIssue(
-                                number=issue_data["number"],
+                                number=issue_number,
                                 title=issue_data["title"],
                                 state=issue_data["state"],
                                 url=issue_data["html_url"],
-                                comments=[],  # Can be extended to fetch comments
                             )
                         )
 
                 pbar.update(1)
                 pbar.set_postfix({"total_issues": len(issues)})
 
-                # Check if there are more pages
                 if len(page_issues) < per_page:
                     break
 
@@ -99,13 +82,19 @@ def fetch_issues(
 
         return issues
 
-    # Fetch open and closed issues
-    open_issues = fetch_issues_by_state("open")
-    closed_issues = fetch_issues_by_state("closed")
+    def fetch_issues(self) -> GithubIssuesData:
+        """
+        Fetch all open and closed issues from a GitHub repository using the REST API.
 
-    return GithubIssuesData(
-        repo_owner=repo_owner,
-        repo_name=repo_name,
-        open_issues=open_issues,
-        closed_issues=closed_issues,
-    )
+        Returns:
+            GithubIssuesData object containing all open and closed issues
+        """
+        open_issues = self.fetch_issues_by_state("open")
+        closed_issues = self.fetch_issues_by_state("closed")
+
+        return GithubIssuesData(
+            repo_owner=self.repo_owner,
+            repo_name=self.repo_name,
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+        )
