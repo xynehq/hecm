@@ -1,23 +1,22 @@
+import os
+
 import rich
 from dotenv import load_dotenv
 
-from hecm.gh_utils import GithubRepositoryAnalyzer
+from hecm.gh_utils import fetch_issues
 
 load_dotenv()
-analyzer = GithubRepositoryAnalyzer(
+analyzer = fetch_issues(
     repo_owner="juspay",
     repo_name="hyperswitch",
-)
-issues = analyzer.get_issues(
-    max_open_issues=100,
-    max_closed_issues=100,
+    github_token=os.getenv("GITHUB_TOKEN"),
 )
 
 
 rich.print("Sample open issue =================================\n")
-rich.print(issues.open_issues[0])
+rich.print(analyzer.open_issues[0])
 rich.print("===================================================\n")
 
 rich.print("Sample closed issue ===============================\n")
-rich.print(issues.closed_issues[0])
+rich.print(analyzer.closed_issues[0])
 rich.print("===================================================\n")
