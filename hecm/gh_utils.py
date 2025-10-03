@@ -1,5 +1,4 @@
 import os
-import time
 from typing import List, Literal, Optional
 
 import github3
@@ -12,7 +11,7 @@ class GithubIssue(BaseModel):
     title: str
     state: Literal["open", "closed"]
     url: str
-    linked_pr_url: Optional[str] = None
+    comments: List[str] = []
 
 
 class GithubIssuesData(BaseModel):
@@ -22,44 +21,23 @@ class GithubIssuesData(BaseModel):
     closed_issues: List[GithubIssue]
 
 
-def get_issues(
-    repo_owner: str,
-    repo_name: str,
-    max_open_issues: Optional[int] = None,
-    max_closed_issues: Optional[int] = None,
-    max_retries: int = 3,
-    retry_delay: int = 5,
-) -> GithubIssuesData:
-    """
-    Get the github issue data from a github repository.
-
-    Args:
-        repo_owner: The owner/organization of the repository
-        repo_name: The repository name
-        max_open_issues: Maximum number of open issues to fetch (default: None)
-        max_closed_issues: Maximum number of closed issues to fetch (default: None)
-        max_retries: Maximum number of retries on timeout (default: 3)
-        retry_delay: Delay in seconds between retries (default: 5)
-
-    Returns: GithubIssuesData
-    """
-    gh = github3.login(token=os.getenv("GITHUB_TOKEN"))
-    repository = gh.repository(repo_owner, repo_name)
-    if not repository:
-        raise ValueError(f"Repository {repo_owner}/{repo_name} not found")
-
-    # Count issues by iterating (filtering out PRs)
-    open_issues: List[GithubIssue] = []
-    closed_issues: List[GithubIssue] = []
+class GithubRepositoryAnalyzer:
+    def __init__(self, repo_owner: str, repo_name: str) -> None:
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        gh = github3.login(token=os.getenv("GITHUB_TOKEN"))
+        self.repository = gh.repository(repo_owner, repo_name)
+        if not self.repository:
+            raise ValueError(f"Repository {repo_owner}/{repo_name} not found")
 
     def fetch_issues_with_retry(
-        state: str, max_issues: Optional[int] = None
+        self, state: str, max_issues: Optional[int] = None
     ) -> List[GithubIssue]:
         """Helper function to fetch issues with retry logic."""
         issues = []
         total_issues = 1
         for issue in tqdm(
-            repository.issues(state=state), desc=f"Looking for {state} issues"
+            self.repository.issues(state=state), desc=f"Looking for {state} issues"
         ):
             try:
                 if not issue.pull_request_urls:
@@ -80,13 +58,36 @@ def get_issues(
 
         return issues
 
-    # Fetch open and closed issues
-    open_issues = fetch_issues_with_retry("open", max_issues=max_open_issues)
-    closed_issues = fetch_issues_with_retry("closed", max_issues=max_closed_issues)
+    def get_issues(
+        self,
+        max_open_issues: Optional[int] = None,
+        max_closed_issues: Optional[int] = None,
+    ) -> GithubIssuesData:
+        """
+        Get the github issue data from a github repository.
 
-    return GithubIssuesData(
-        repo_owner=repo_owner,
-        repo_name=repo_name,
-        open_issues=open_issues,
-        closed_issues=closed_issues,
-    )
+        Args:
+            repo_owner: The owner/organization of the repository
+            repo_name: The repository name
+            max_open_issues: Maximum number of open issues to fetch (default: None)
+            max_closed_issues: Maximum number of closed issues to fetch (default: None)
+
+        Returns: GithubIssuesData
+        """
+
+        # Count issues by iterating (filtering out PRs)
+        open_issues: List[GithubIssue] = []
+        closed_issues: List[GithubIssue] = []
+
+        # Fetch open and closed issues
+        open_issues = self.fetch_issues_with_retry("open", max_issues=max_open_issues)
+        closed_issues = self.fetch_issues_with_retry(
+            "closed", max_issues=max_closed_issues
+        )
+
+        return GithubIssuesData(
+            repo_owner=self.repo_owner,
+            repo_name=self.repo_name,
+            open_issues=open_issues,
+            closed_issues=closed_issues,
+        )
