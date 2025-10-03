@@ -11,12 +11,12 @@ class GithubIssue(BaseModel):
     title: str
     state: Literal["open", "closed"]
     url: str
-    linked_pr_number: Optional[List[int]] = None
+    linked_pr_numbers: Optional[List[int]] = None
 
 
-class GithubIssuesData(BaseModel):
-    repo_owner: str
-    repo_name: str
+class SWEBenchDataPoint(BaseModel):
+    repo: str
+    instance_id: List[str]
     closed_issues: List[GithubIssue]
 
 
@@ -113,10 +113,13 @@ class GithubIssueAnalyzer:
             desc="Fetching linked PRs",
             total=len(closed_issues),
         ):
-            closed_issues[idx].linked_pr_number = self.get_linked_prs(issue.url)
+            closed_issues[idx].linked_pr_numbers = self.get_linked_prs(issue.url)
 
-        return GithubIssuesData(
-            repo_owner=self.repo_owner,
-            repo_name=self.repo_name,
+        return SWEBenchDataPoint(
+            repo=f"{self.repo_owner}/{self.repo_name}",
+            instance_id=[
+                f"{self.repo_owner}__{self.repo_name}-{issue.number}"
+                for issue in closed_issues
+            ],
             closed_issues=closed_issues,
         )
