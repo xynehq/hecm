@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from tqdm.auto import tqdm
 
-from hecm.utils import remove_dir_from_diff
+from hecm.utils import keep_only_dir_from_diff, remove_dir_from_diff
 
 
 class PRComment(BaseModel):
@@ -46,6 +46,7 @@ class SWEBenchDataPoint(BaseModel):
     instance_id: str
     problem_statement: str
     patch: str
+    test_patch: str
     created_at: str
     hints_text: str
 
@@ -57,11 +58,13 @@ class SWEBenchDataGenerator:
         repo_name: str,
         github_token: Optional[str] = None,
         gold_patch_ignore_dirs: List[str] = [".github"],
+        test_dirs: List[str] = [],
     ):
         self.repo_owner = repo_owner
         self.repo_name = repo_name
         self.github_token = github_token
         self.gold_patch_ignore_dirs = gold_patch_ignore_dirs
+        self.test_dirs = test_dirs
         self.base_url = "https://api.github.com"
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
@@ -109,16 +112,22 @@ class SWEBenchDataGenerator:
         )
 
     @weave.op
-    def get_gold_patch(self, pr_number: int) -> str:
+    def get_patch(self, pr_number: int) -> str:
         url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
         headers = self.headers.copy()
         headers["Accept"] = "application/vnd.github.v3.diff"
         response = requests.get(url, headers=headers)
         response.raise_for_status()
+
         gold_patch = response.text
         for dir in self.gold_patch_ignore_dirs:
             gold_patch = remove_dir_from_diff(gold_patch, dir)
-        return gold_patch
+
+        test_patch = response.text
+        for dir in self.test_dirs:
+            test_patch = keep_only_dir_from_diff(test_patch, dir)
+
+        return gold_patch, test_patch
 
     @weave.op
     def fetch_issues_by_state(
@@ -199,12 +208,14 @@ class SWEBenchDataGenerator:
         for idx, issue in enumerate(closed_issues):
             if issue.linked_pr:
                 issue_body = issue.body if issue.body else ""
+                gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
                 data_points.append(
                     SWEBenchDataPoint(
                         repo=f"{self.repo_owner}/{self.repo_name}",
                         instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
                         problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
-                        patch=self.get_gold_patch(issue.linked_pr.number),
+                        patch=gold_patch,
+                        test_patch=test_patch,
                         created_at=issue.linked_pr.created_at,
                         hints_text=issue.linked_pr.get_hints_text(),
                     )
