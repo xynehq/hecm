@@ -1,11 +1,12 @@
 import os
 
-import rich
+import weave
 from dotenv import load_dotenv
 
 from hecm.gh_utils import GithubIssueAnalyzer
 
 load_dotenv()
+weave.init(project_name="hyperswitch")
 
 analyzer = GithubIssueAnalyzer(
     repo_owner="juspay",
@@ -14,4 +15,3 @@ analyzer = GithubIssueAnalyzer(
 )
 
 data_points = analyzer.fetch_issues(max_issues=50)
-rich.print(data_points[0])
