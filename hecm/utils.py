@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Iterable, List, Optional, Union
 
 import requests
-import weave
 
 
 def remove_dir_from_diff(patch: str, directory: str) -> str:
@@ -140,7 +139,6 @@ def keep_only_dir_from_diff(
     return "".join(out)
 
 
-@weave.op
 def get_last_release_before_pr_merge(
     owner: str,
     repo: str,

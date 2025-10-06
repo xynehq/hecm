@@ -77,7 +77,6 @@ class SWEBenchDataGenerator:
         if github_token:
             self.headers["Authorization"] = f"token {github_token}"
 
-    @weave.op
     def get_linked_prs(self, url: str) -> Union[List[int], None]:
         response = requests.get(url)
         response.raise_for_status()
@@ -89,7 +88,6 @@ class SWEBenchDataGenerator:
         except:
             return None
 
-    @weave.op
     def fetch_pr_data(self, pr_number: int) -> LinkedPR:
         url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
         response = requests.get(url, headers=self.headers)
@@ -116,7 +114,6 @@ class SWEBenchDataGenerator:
             comments=comments,
         )
 
-    @weave.op
     def get_patch(self, pr_number: int) -> str:
         url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
         headers = self.headers.copy()
@@ -134,7 +131,6 @@ class SWEBenchDataGenerator:
 
         return gold_patch, test_patch
 
-    @weave.op
     def fetch_issues_by_state(
         self, state: str, max_issues: Optional[int] = None
     ) -> List[GithubIssue]:
@@ -214,8 +210,8 @@ class SWEBenchDataGenerator:
             if issue.linked_pr:
                 issue_body = issue.body if issue.body else ""
                 gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
-                data_points.append(
-                    SWEBenchDataPoint(
+                try:
+                    data_point = SWEBenchDataPoint(
                         repo=f"{self.repo_owner}/{self.repo_name}",
                         instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
                         problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
@@ -227,6 +223,8 @@ class SWEBenchDataGenerator:
                             self.repo_owner, self.repo_name, issue.linked_pr.number
                         )["tag_name"],
                     )
-                )
+                    data_points.append(data_point)
+                except Exception:
+                    pass
 
         return data_points
