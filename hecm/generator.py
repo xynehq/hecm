@@ -54,6 +54,8 @@ class SWEBenchDataPoint(BaseModel):
     created_at: str
     hints_text: str
     version: str
+    base_commit: str
+    environment_setup_commit: str
 
 
 class SWEBenchDataGenerator:
@@ -222,6 +224,8 @@ class SWEBenchDataGenerator:
                         version=get_last_release_before_pr_merge(
                             self.repo_owner, self.repo_name, issue.linked_pr.number
                         )["tag_name"],
+                        base_commit=issue.linked_pr.base_commit,
+                        environment_setup_commit=issue.linked_pr.base_commit,
                     )
                     data_points.append(data_point)
                 except Exception:
