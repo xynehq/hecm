@@ -1,5 +1,11 @@
+import os
 import re
-from typing import Iterable, List, Union
+import time
+from datetime import datetime, timezone
+from typing import Iterable, List, Optional, Union
+
+import requests
+import weave
 
 
 def remove_dir_from_diff(patch: str, directory: str) -> str:
@@ -132,3 +138,109 @@ def keep_only_dir_from_diff(
             out.extend(lines[section_start:section_end])
 
     return "".join(out)
+
+
+@weave.op
+def get_last_release_before_pr_merge(
+    owner: str,
+    repo: str,
+    pr_number: int,
+    include_prereleases: bool = False,
+    include_drafts: bool = False,
+) -> Optional[dict]:
+    token = os.getenv("GITHUB_TOKEN")
+
+    def _parse_iso8601_z(dt: str) -> datetime:
+        return datetime.fromisoformat(dt.replace("Z", "+00:00")).astimezone(
+            timezone.utc
+        )
+
+    def _headers(token: Optional[str]) -> dict:
+        h = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "pr-release-finder",
+        }
+        if token:
+            h["Authorization"] = f"Bearer {token}"
+        return h
+
+    def _get_pr_merged_at(
+        owner: str, repo: str, pr_number: int, token: Optional[str]
+    ) -> datetime:
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        r = requests.get(url, headers=_headers(token), timeout=30)
+        if r.status_code == 404:
+            raise ValueError(f"PR #{pr_number} not found in {owner}/{repo}")
+        r.raise_for_status()
+        data = r.json()
+        merged_at = data.get("merged_at")
+        if not merged_at:
+            state = data.get("state", "unknown")
+            raise ValueError(f"PR #{pr_number} is not merged (state={state}).")
+        return _parse_iso8601_z(merged_at)
+
+    def _iter_releases(
+        owner: str, repo: str, token: Optional[str], per_page: int = 100
+    ):
+        page = 1
+        while True:
+            url = f"https://api.github.com/repos/{owner}/{repo}/releases"
+            r = requests.get(
+                url,
+                headers=_headers(token),
+                params={"per_page": per_page, "page": page},
+                timeout=30,
+            )
+            if r.status_code == 404:
+                raise ValueError(
+                    f"Repository {owner}/{repo} not found or releases are not accessible."
+                )
+            r.raise_for_status()
+            items = r.json()
+            if not items:
+                break
+            for rel in items:
+                yield rel
+            # Basic pagination: stop if fewer than per_page items
+            if len(items) < per_page:
+                break
+            page += 1
+            # Small courtesy sleep to avoid secondary rate limits
+            time.sleep(0.05)
+
+    merged_at = _get_pr_merged_at(owner, repo, pr_number, token)
+
+    best_release = None
+    best_pub_dt = None
+
+    for rel in _iter_releases(owner, repo, token):
+        # Filter by draft/prerelease visibility according to options
+        if rel.get("draft", False) and not include_drafts:
+            continue
+        if rel.get("prerelease", False) and not include_prereleases:
+            continue
+
+        pub = rel.get("published_at")
+        # Some releases might be drafts with null published_at
+        if not pub:
+            continue
+
+        pub_dt = _parse_iso8601_z(pub)
+
+        # We want the release published at/before the merge moment, with the latest possible time
+        if pub_dt <= merged_at and (best_pub_dt is None or pub_dt > best_pub_dt):
+            best_pub_dt = pub_dt
+            best_release = {
+                "id": rel.get("id"),
+                "tag_name": rel.get("tag_name"),
+                "name": rel.get("name"),
+                "html_url": rel.get("html_url"),
+                "draft": rel.get("draft", False),
+                "prerelease": rel.get("prerelease", False),
+                "created_at": rel.get("created_at"),
+                "published_at": rel.get("published_at"),
+                "body": rel.get("body"),
+            }
+
+    return best_release

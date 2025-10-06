@@ -6,7 +6,11 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from tqdm.auto import tqdm
 
-from hecm.utils import keep_only_dir_from_diff, remove_dir_from_diff
+from hecm.utils import (
+    get_last_release_before_pr_merge,
+    keep_only_dir_from_diff,
+    remove_dir_from_diff,
+)
 
 
 class PRComment(BaseModel):
@@ -49,6 +53,7 @@ class SWEBenchDataPoint(BaseModel):
     test_patch: str
     created_at: str
     hints_text: str
+    version: str
 
 
 class SWEBenchDataGenerator:
@@ -218,6 +223,9 @@ class SWEBenchDataGenerator:
                         test_patch=test_patch,
                         created_at=issue.linked_pr.created_at,
                         hints_text=issue.linked_pr.get_hints_text(),
+                        version=get_last_release_before_pr_merge(
+                            self.repo_owner, self.repo_name, issue.linked_pr.number
+                        )["tag_name"],
                     )
                 )
 
