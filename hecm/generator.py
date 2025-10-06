@@ -1,11 +1,12 @@
 from typing import List, Literal, Optional, Union
 
 import requests
-import rich
 import weave
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from tqdm.auto import tqdm
+
+from hecm.utils import remove_dir_from_diff
 
 
 class PRComment(BaseModel):
@@ -49,13 +50,18 @@ class SWEBenchDataPoint(BaseModel):
     hints_text: str
 
 
-class GithubIssueAnalyzer:
+class SWEBenchDataGenerator:
     def __init__(
-        self, repo_owner: str, repo_name: str, github_token: Optional[str] = None
+        self,
+        repo_owner: str,
+        repo_name: str,
+        github_token: Optional[str] = None,
+        gold_patch_ignore_dirs: List[str] = [".github"],
     ):
         self.repo_owner = repo_owner
         self.repo_name = repo_name
         self.github_token = github_token
+        self.gold_patch_ignore_dirs = gold_patch_ignore_dirs
         self.base_url = "https://api.github.com"
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
@@ -109,7 +115,10 @@ class GithubIssueAnalyzer:
         headers["Accept"] = "application/vnd.github.v3.diff"
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        return response.text
+        gold_patch = response.text
+        for dir in self.gold_patch_ignore_dirs:
+            gold_patch = remove_dir_from_diff(gold_patch, dir)
+        return gold_patch
 
     @weave.op
     def fetch_issues_by_state(
@@ -190,9 +199,6 @@ class GithubIssueAnalyzer:
         for idx, issue in enumerate(closed_issues):
             if issue.linked_pr:
                 issue_body = issue.body if issue.body else ""
-                if issue.number == 9692:
-                    rich.print(idx)
-                    rich.print(issue)
                 data_points.append(
                     SWEBenchDataPoint(
                         repo=f"{self.repo_owner}/{self.repo_name}",

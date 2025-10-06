@@ -19,15 +19,16 @@ import os
 import weave
 from dotenv import load_dotenv
 
-from hecm.gh_utils import GithubIssueAnalyzer
+from hecm import SWEBenchDataGenerator
 
 load_dotenv()
 weave.init(project_name="hyperswitch")
 
-analyzer = GithubIssueAnalyzer(
+analyzer = SWEBenchDataGenerator(
     repo_owner="juspay",
     repo_name="hyperswitch",
     github_token=os.getenv("GITHUB_TOKEN"),
+    gold_patch_ignore_dirs=[".github", "cypress-tests", "cypress-test-files"],
 )
 
 data_points = analyzer.fetch_issues(max_issues=50)
