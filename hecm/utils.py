@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional, Union
@@ -242,3 +243,101 @@ def get_last_release_before_pr_merge(
             }
 
     return best_release
+
+
+def pass_to_pass_for_pr(
+    owner: str,
+    repo: str,
+    pr_number: int,
+    repo_dir: str,
+    github_token: str | None = None,
+) -> List[str]:
+    def _run(cmd: List[str], cwd: Optional[str] = None, env: Optional[dict] = None):
+        p = subprocess.run(cmd, cwd=cwd, env=env, text=True, capture_output=True)
+        if p.returncode != 0:
+            raise RuntimeError(
+                f"Command failed: {' '.join(cmd)}\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}"
+            )
+        return p.stdout + "\n" + p.stderr
+
+    def _git_checkout(repo_dir: str, sha: str):
+        _run(["git", "fetch", "--all", "--tags", "--prune"], cwd=repo_dir)
+        _run(["git", "checkout", "--quiet", sha], cwd=repo_dir)
+
+    def _collect_cargo_passes(repo_dir):
+        # Run the full workspace tests and parse "test <name> ... ok" lines
+        env = os.environ.copy()
+        env.setdefault("RUST_BACKTRACE", "1")
+        out = _run(
+            ["cargo", "test", "--workspace", "--no-fail-fast"], cwd=repo_dir, env=env
+        )
+        passed = set()
+        rx = re.compile(r"^test\s+([^\s]+)\s+\.\.\.\s+ok$", re.MULTILINE)
+        for m in rx.finditer(out):
+            passed.add(m.group(1))
+        return passed
+
+    def _gh_get(url: str, token: Optional[str] = None):
+        headers = {"Accept": "application/vnd.github+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
+    def _derive_shas_from_pr(
+        owner: str, repo: str, pr_number: int, token: Optional[str] = None
+    ):
+        pr = _gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            token=token,
+        )
+        if not pr.get("merged"):
+            raise ValueError(f"PR #{pr_number} is not merged")
+        post_sha = pr.get("merge_commit_sha") or pr.get("head", {}).get("sha")
+        if not post_sha:
+            raise ValueError(f"PR #{pr_number}: cannot determine post-merge SHA")
+
+        # Get parents of the merge/squash/rebase commit; parent[0] is the base branch tip before the merge
+        commit = _gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits/{post_sha}",
+            token=token,
+        )
+        parents = commit.get("parents", [])
+        if parents:
+            base_sha = parents[0]["sha"]
+            return base_sha, post_sha
+
+        # Fallback: use the first PR commit's parent
+        commits = _gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/commits",
+            token=token,
+        )
+        if not commits:
+            raise ValueError(f"PR #{pr_number}: no commits returned by API")
+        first = commits[0]["sha"]
+        first_commit = _gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits/{first}", token=token
+        )
+        p = first_commit.get("parents", [])
+        if not p:
+            raise ValueError(
+                f"PR #{pr_number}: cannot determine base commit from first PR commit"
+            )
+        base_sha = p[0]["sha"]
+        return base_sha, post_sha
+
+    base_sha, post_sha = _derive_shas_from_pr(
+        owner, repo, pr_number, token=github_token
+    )
+
+    # Collect passing tests before and after
+    _git_checkout(repo_dir, base_sha)
+    before = _collect_cargo_passes(repo_dir)
+
+    _git_checkout(repo_dir, post_sha)
+    after = _collect_cargo_passes(repo_dir)
+
+    # Intersection: tests that pass both before and after the PR
+    p2p = sorted(before & after)
+    return p2p
