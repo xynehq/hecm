@@ -3,6 +3,7 @@ from typing import List, Literal, Optional, Union
 import requests
 import weave
 from bs4 import BeautifulSoup
+from datasets import Dataset
 from pydantic import BaseModel
 from tqdm.auto import tqdm
 
@@ -56,6 +57,36 @@ class SWEBenchDataPoint(BaseModel):
     version: str
     base_commit: str
     environment_setup_commit: str
+
+
+class SWEBenchDataset(BaseModel):
+    data_points: List[SWEBenchDataPoint]
+
+    def export_to_csv(self, filename: str):
+        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit\n"
+        for data_point in tqdm(self.data_points, desc="Exporting to CSV"):
+            content += f"{data_point.repo}, "
+            content += f"{data_point.instance_id}, "
+            content += f"{data_point.problem_statement}, "
+            content += f"{data_point.patch}, "
+            content += f"{data_point.test_patch}, "
+            content += f"{data_point.created_at}, "
+            content += f"{data_point.hints_text}, "
+            content += f"{data_point.version}, "
+            content += f"{data_point.base_commit}, "
+            content += f"{data_point.environment_setup_commit}\n"
+        with open(filename, "w") as f:
+            f.write(content)
+
+    def export_to_huggingface(self, dataset_name: str) -> Dataset:
+        keys = self.data_points[0].model_fields.keys()
+        dataset_dict = {key: [] for key in keys}
+        for data_point in tqdm(self.data_points, desc="Exporting to Hugging Face"):
+            for key in keys:
+                dataset_dict[key].append(getattr(data_point, key))
+        dataset = Dataset.from_dict(dataset_dict)
+        dataset.push_to_hub(dataset_name)
+        return dataset
 
 
 class SWEBenchDataGenerator:
@@ -189,12 +220,12 @@ class SWEBenchDataGenerator:
         return issues
 
     @weave.op
-    def fetch_issues(self, max_issues: Optional[int] = None) -> List[SWEBenchDataPoint]:
+    def fetch_issues(self, max_issues: Optional[int] = None) -> SWEBenchDataset:
         """
         Fetch all open and closed issues from a GitHub repository using the REST API.
 
         Returns:
-            List[SWEBenchDataPoint] object containing all open and closed issues
+            SWEBenchDataset: SWEBenchDataset object.
         """
         closed_issues = self.fetch_issues_by_state("closed", max_issues)
 
@@ -208,7 +239,11 @@ class SWEBenchDataGenerator:
                 closed_issues[idx].linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
 
         data_points: List[SWEBenchDataPoint] = []
-        for idx, issue in enumerate(closed_issues):
+        for idx, issue in tqdm(
+            enumerate(closed_issues),
+            desc="Creating data points",
+            total=len(closed_issues),
+        ):
             if issue.linked_pr:
                 issue_body = issue.body if issue.body else ""
                 gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
@@ -231,4 +266,4 @@ class SWEBenchDataGenerator:
                 except Exception:
                     pass
 
-        return data_points
+        return SWEBenchDataset(data_points=data_points)

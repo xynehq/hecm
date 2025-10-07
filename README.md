@@ -16,13 +16,11 @@ uv pip install -e .
 ```python
 import os
 
-import weave
 from dotenv import load_dotenv
 
 from hecm import SWEBenchDataGenerator
 
 load_dotenv()
-weave.init(project_name="hyperswitch")
 
 analyzer = SWEBenchDataGenerator(
     repo_owner="juspay",
@@ -33,4 +31,10 @@ analyzer = SWEBenchDataGenerator(
 )
 
 data_points = analyzer.fetch_issues(max_issues=50)
+
+# export to csv
+data_points.export_to_csv("swebench_dataset.csv")
+
+# export to huggingface
+data_points.export_to_huggingface("geekyrakshit/hyperswitch")
 ```
