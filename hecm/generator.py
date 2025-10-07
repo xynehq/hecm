@@ -1,96 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Literal, Optional, Union
+from typing import List, Optional, Union
 
 import requests
-import weave
 from bs4 import BeautifulSoup
-from datasets import Dataset
-from pydantic import BaseModel
 from tqdm.auto import tqdm
 
+from hecm.schemas import (
+    GithubIssue,
+    LinkedPR,
+    PRComment,
+    SWEBenchDataPoint,
+    SWEBenchDataset,
+)
 from hecm.utils import (
     get_last_release_before_pr_merge,
     keep_only_dir_from_diff,
     remove_dir_from_diff,
 )
-
-
-class PRComment(BaseModel):
-    comment_body: str
-    diff_hunk: Optional[str] = None
-
-
-class LinkedPR(BaseModel):
-    number: int
-    title: str
-    body: Optional[str] = None
-    base_commit: str
-    created_at: str
-    comments: List[PRComment] = []
-    commit_messages: List[str] = []
-
-    def get_hints_text(self) -> str:
-        hints_text = self.body if self.body else ""
-        for comment in self.comments:
-            hints_text = (
-                hints_text + f"\n\n{comment.diff_hunk}" if comment.diff_hunk else ""
-            )
-            hints_text += f"\n\n{comment.comment_body}\n\n" + "-" * 100
-        return hints_text
-
-
-class GithubIssue(BaseModel):
-    number: int
-    title: str
-    body: Optional[str] = None
-    state: Literal["open", "closed"]
-    url: str
-    linked_pr: Optional[LinkedPR] = None
-
-
-class SWEBenchDataPoint(BaseModel):
-    repo: str
-    instance_id: str
-    problem_statement: str
-    patch: str
-    test_patch: str
-    created_at: str
-    hints_text: str
-    commit_messages: List[str]
-    version: str
-    base_commit: str
-    environment_setup_commit: str
-
-
-class SWEBenchDataset(BaseModel):
-    data_points: List[SWEBenchDataPoint]
-
-    def export_to_csv(self, filename: str):
-        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit, commit_messages\n"
-        for data_point in tqdm(self.data_points, desc="Exporting to CSV"):
-            content += f"{data_point.repo}, "
-            content += f"{data_point.instance_id}, "
-            content += f"{data_point.problem_statement}, "
-            content += f"{data_point.patch}, "
-            content += f"{data_point.test_patch}, "
-            content += f"{data_point.created_at}, "
-            content += f"{data_point.hints_text}, "
-            content += f"{data_point.version}, "
-            content += f"{data_point.base_commit}, "
-            content += f"{data_point.environment_setup_commit}, "
-            content += f"{str(data_point.commit_messages)}\n"
-        with open(filename, "w") as f:
-            f.write(content)
-
-    def export_to_huggingface(self, dataset_name: str) -> Dataset:
-        keys = self.data_points[0].model_fields.keys()
-        dataset_dict = {key: [] for key in keys}
-        for data_point in tqdm(self.data_points, desc="Exporting to Hugging Face"):
-            for key in keys:
-                dataset_dict[key].append(getattr(data_point, key))
-        dataset = Dataset.from_dict(dataset_dict)
-        dataset.push_to_hub(dataset_name)
-        return dataset
 
 
 class SWEBenchDataGenerator:
@@ -101,6 +27,8 @@ class SWEBenchDataGenerator:
         github_token: Optional[str] = None,
         gold_patch_ignore_dirs: List[str] = [".github"],
         test_dirs: List[str] = [],
+        issues_page_counter: int = 1,
+        register_commit_messages: bool = False,
     ):
         self.repo_owner = repo_owner
         self.repo_name = repo_name
@@ -113,6 +41,8 @@ class SWEBenchDataGenerator:
         }
         if github_token:
             self.headers["Authorization"] = f"token {github_token}"
+        self.issues_page_counter = issues_page_counter
+        self.register_commit_messages = register_commit_messages
 
     def get_linked_prs(self, url: str) -> Union[List[int], None]:
         response = requests.get(url)
@@ -142,25 +72,13 @@ class SWEBenchDataGenerator:
             )
             for comment in comments_data
         ]
-
-        commit_messages_url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}/commits"
-        commit_messages_response = requests.get(
-            commit_messages_url, headers=self.headers
-        )
-        commit_messages_response.raise_for_status()
-        commit_messages_data = commit_messages_response.json()
-        commit_messages = [
-            commit["commit"]["message"] for commit in commit_messages_data
-        ]
-
         return LinkedPR(
             number=pr_data["number"],
             title=pr_data["title"],
             body=pr_data["body"],
             base_commit=pr_data["base"]["sha"],
             created_at=pr_data["created_at"],
-            comments=comments,
-            commit_messages=commit_messages,
+            comments=comments if self.register_commit_messages else [],
         )
 
     def get_patch(self, pr_number: int) -> str:
@@ -180,12 +98,13 @@ class SWEBenchDataGenerator:
 
         return gold_patch, test_patch
 
-    def fetch_issues_by_state(
-        self, state: str, max_issues: Optional[int] = None
+    def fetch_issues(
+        self,
+        state: str = "closed",
+        max_issues: Optional[int] = None,
     ) -> List[GithubIssue]:
         """Helper function to fetch issues by state with pagination."""
         issues = []
-        page = 1
         per_page = 100  # Maximum allowed by GitHub API
 
         with tqdm(desc=f"Fetching {state} issues", unit="page") as pbar:
@@ -193,7 +112,7 @@ class SWEBenchDataGenerator:
                 url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/issues"
                 params = {
                     "state": state,
-                    "page": page,
+                    "page": self.issues_page_counter,
                     "per_page": per_page,
                     "sort": "created",
                     "direction": "desc",
@@ -231,16 +150,21 @@ class SWEBenchDataGenerator:
                 if len(page_issues) < per_page:
                     break
 
-                page += 1
+                self.issues_page_counter += 1
 
         return issues
 
-    def _fetch_linked_pr_for_issue(self, issue: GithubIssue) -> GithubIssue:
+    def _fetch_linked_pr_for_issue(
+        self, issue: GithubIssue
+    ) -> Union[GithubIssue, None]:
         """Helper method to fetch linked PR for a single issue."""
-        linked_pr_numbers = self.get_linked_prs(issue.url)
-        if linked_pr_numbers:
-            issue.linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
-        return issue
+        try:
+            linked_pr_numbers = self.get_linked_prs(issue.url)
+            if linked_pr_numbers:
+                issue.linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
+            return issue
+        except:
+            return None
 
     def _create_data_point_from_issue(
         self, issue: GithubIssue
@@ -249,75 +173,72 @@ class SWEBenchDataGenerator:
         if not issue.linked_pr:
             return None
 
-        try:
-            issue_body = issue.body if issue.body else ""
-            gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
+        issue_body = issue.body if issue.body else ""
+        gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
 
-            data_point = SWEBenchDataPoint(
-                repo=f"{self.repo_owner}/{self.repo_name}",
-                instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
-                problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
-                patch=gold_patch,
-                test_patch=test_patch,
-                created_at=issue.linked_pr.created_at,
-                hints_text=issue.linked_pr.get_hints_text(),
-                version=get_last_release_before_pr_merge(
-                    self.repo_owner, self.repo_name, issue.linked_pr.number
-                )["tag_name"],
-                base_commit=issue.linked_pr.base_commit,
-                environment_setup_commit=issue.linked_pr.base_commit,
-                commit_messages=issue.linked_pr.commit_messages,
-            )
-            return data_point
-        except Exception:
+        if issue.linked_pr is not None:
+            try:
+                return SWEBenchDataPoint(
+                    repo=f"{self.repo_owner}/{self.repo_name}",
+                    instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
+                    problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
+                    patch=gold_patch,
+                    test_patch=test_patch,
+                    created_at=issue.linked_pr.created_at,
+                    hints_text=issue.linked_pr.get_hints_text(),
+                    version=get_last_release_before_pr_merge(
+                        self.repo_owner, self.repo_name, issue.linked_pr.number
+                    )["tag_name"],
+                    base_commit=issue.linked_pr.base_commit,
+                    environment_setup_commit=issue.linked_pr.base_commit,
+                )
+            except ValueError:
+                return None
+        else:
             return None
 
-    @weave.op
-    def fetch_issues(
-        self, max_issues: Optional[int] = None, max_workers: int = 10
-    ) -> SWEBenchDataset:
-        """
-        Fetch all open and closed issues from a GitHub repository using the REST API.
-
-        Args:
-            max_issues: Maximum number of issues to fetch. If None, fetches all issues.
-            max_workers: Maximum number of parallel workers for I/O operations.
-
-        Returns:
-            SWEBenchDataset: SWEBenchDataset object.
-        """
-        closed_issues = self.fetch_issues_by_state("closed", max_issues)
+    def generate_issues(
+        self,
+        max_issues: Optional[int] = None,
+        max_workers: int = 10,
+    ) -> List[GithubIssue]:
+        issues = self.fetch_issues("closed", max_issues)
 
         # Parallelize fetching linked PRs
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._fetch_linked_pr_for_issue, issue): idx
-                for idx, issue in enumerate(closed_issues)
+                for idx, issue in enumerate(issues)
             }
 
             for future in tqdm(
                 as_completed(futures),
                 desc="Fetching linked PRs",
-                total=len(closed_issues),
+                total=len(issues),
             ):
                 idx = futures[future]
-                closed_issues[idx] = future.result()
+                result = future.result()
+                if result is not None:
+                    issues[idx] = result
 
-        # Parallelize creating data points
+        return issues
+
+    def generate_data_points(
+        self, issues: List[GithubIssue], max_workers: int = 10
+    ) -> SWEBenchDataset:
         data_points: List[SWEBenchDataPoint] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._create_data_point_from_issue, issue): idx
-                for idx, issue in enumerate(closed_issues)
+                for idx, issue in enumerate(issues)
             }
 
             for future in tqdm(
                 as_completed(futures),
                 desc="Creating data points",
-                total=len(closed_issues),
+                total=len(issues),
             ):
                 data_point = future.result()
                 if data_point is not None:
                     data_points.append(data_point)
-
         return SWEBenchDataset(data_points=data_points)

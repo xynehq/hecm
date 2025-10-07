@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional, Union
 
+import msgpack
 import requests
 
 

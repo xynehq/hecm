@@ -9,6 +9,7 @@ dependencies = [
     "datasets>=4.1.1",
     "dspy>=3.0.3",
     "gitpython>=3.1.45",
+    "msgpack>=1.1.1",
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.0",
