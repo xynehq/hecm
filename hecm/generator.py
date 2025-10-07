@@ -27,6 +27,7 @@ class LinkedPR(BaseModel):
     base_commit: str
     created_at: str
     comments: List[PRComment] = []
+    commit_messages: List[str] = []
 
     def get_hints_text(self) -> str:
         hints_text = self.body if self.body else ""
@@ -55,6 +56,7 @@ class SWEBenchDataPoint(BaseModel):
     test_patch: str
     created_at: str
     hints_text: str
+    commit_messages: List[str]
     version: str
     base_commit: str
     environment_setup_commit: str
@@ -64,7 +66,7 @@ class SWEBenchDataset(BaseModel):
     data_points: List[SWEBenchDataPoint]
 
     def export_to_csv(self, filename: str):
-        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit\n"
+        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit, commit_messages\n"
         for data_point in tqdm(self.data_points, desc="Exporting to CSV"):
             content += f"{data_point.repo}, "
             content += f"{data_point.instance_id}, "
@@ -75,7 +77,8 @@ class SWEBenchDataset(BaseModel):
             content += f"{data_point.hints_text}, "
             content += f"{data_point.version}, "
             content += f"{data_point.base_commit}, "
-            content += f"{data_point.environment_setup_commit}\n"
+            content += f"{data_point.environment_setup_commit}, "
+            content += f"{str(data_point.commit_messages)}\n"
         with open(filename, "w") as f:
             f.write(content)
 
@@ -139,6 +142,17 @@ class SWEBenchDataGenerator:
             )
             for comment in comments_data
         ]
+
+        commit_messages_url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}/commits"
+        commit_messages_response = requests.get(
+            commit_messages_url, headers=self.headers
+        )
+        commit_messages_response.raise_for_status()
+        commit_messages_data = commit_messages_response.json()
+        commit_messages = [
+            commit["commit"]["message"] for commit in commit_messages_data
+        ]
+
         return LinkedPR(
             number=pr_data["number"],
             title=pr_data["title"],
@@ -146,6 +160,7 @@ class SWEBenchDataGenerator:
             base_commit=pr_data["base"]["sha"],
             created_at=pr_data["created_at"],
             comments=comments,
+            commit_messages=commit_messages,
         )
 
     def get_patch(self, pr_number: int) -> str:
@@ -251,6 +266,7 @@ class SWEBenchDataGenerator:
                 )["tag_name"],
                 base_commit=issue.linked_pr.base_commit,
                 environment_setup_commit=issue.linked_pr.base_commit,
+                commit_messages=issue.linked_pr.commit_messages,
             )
             return data_point
         except Exception:
