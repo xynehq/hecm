@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Literal, Optional, Union
 
 import requests
@@ -219,51 +220,88 @@ class SWEBenchDataGenerator:
 
         return issues
 
+    def _fetch_linked_pr_for_issue(self, issue: GithubIssue) -> GithubIssue:
+        """Helper method to fetch linked PR for a single issue."""
+        linked_pr_numbers = self.get_linked_prs(issue.url)
+        if linked_pr_numbers:
+            issue.linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
+        return issue
+
+    def _create_data_point_from_issue(
+        self, issue: GithubIssue
+    ) -> Optional[SWEBenchDataPoint]:
+        """Helper method to create a data point from an issue."""
+        if not issue.linked_pr:
+            return None
+
+        try:
+            issue_body = issue.body if issue.body else ""
+            gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
+
+            data_point = SWEBenchDataPoint(
+                repo=f"{self.repo_owner}/{self.repo_name}",
+                instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
+                problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
+                patch=gold_patch,
+                test_patch=test_patch,
+                created_at=issue.linked_pr.created_at,
+                hints_text=issue.linked_pr.get_hints_text(),
+                version=get_last_release_before_pr_merge(
+                    self.repo_owner, self.repo_name, issue.linked_pr.number
+                )["tag_name"],
+                base_commit=issue.linked_pr.base_commit,
+                environment_setup_commit=issue.linked_pr.base_commit,
+            )
+            return data_point
+        except Exception:
+            return None
+
     @weave.op
-    def fetch_issues(self, max_issues: Optional[int] = None) -> SWEBenchDataset:
+    def fetch_issues(
+        self, max_issues: Optional[int] = None, max_workers: int = 10
+    ) -> SWEBenchDataset:
         """
         Fetch all open and closed issues from a GitHub repository using the REST API.
+
+        Args:
+            max_issues: Maximum number of issues to fetch. If None, fetches all issues.
+            max_workers: Maximum number of parallel workers for I/O operations.
 
         Returns:
             SWEBenchDataset: SWEBenchDataset object.
         """
         closed_issues = self.fetch_issues_by_state("closed", max_issues)
 
-        for idx, issue in tqdm(
-            enumerate(closed_issues),
-            desc="Fetching linked PRs",
-            total=len(closed_issues),
-        ):
-            linked_pr_numbers = self.get_linked_prs(issue.url)
-            if linked_pr_numbers:
-                closed_issues[idx].linked_pr = self.fetch_pr_data(linked_pr_numbers[0])
+        # Parallelize fetching linked PRs
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._fetch_linked_pr_for_issue, issue): idx
+                for idx, issue in enumerate(closed_issues)
+            }
 
+            for future in tqdm(
+                as_completed(futures),
+                desc="Fetching linked PRs",
+                total=len(closed_issues),
+            ):
+                idx = futures[future]
+                closed_issues[idx] = future.result()
+
+        # Parallelize creating data points
         data_points: List[SWEBenchDataPoint] = []
-        for idx, issue in tqdm(
-            enumerate(closed_issues),
-            desc="Creating data points",
-            total=len(closed_issues),
-        ):
-            if issue.linked_pr:
-                issue_body = issue.body if issue.body else ""
-                gold_patch, test_patch = self.get_patch(issue.linked_pr.number)
-                try:
-                    data_point = SWEBenchDataPoint(
-                        repo=f"{self.repo_owner}/{self.repo_name}",
-                        instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
-                        problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
-                        patch=gold_patch,
-                        test_patch=test_patch,
-                        created_at=issue.linked_pr.created_at,
-                        hints_text=issue.linked_pr.get_hints_text(),
-                        version=get_last_release_before_pr_merge(
-                            self.repo_owner, self.repo_name, issue.linked_pr.number
-                        )["tag_name"],
-                        base_commit=issue.linked_pr.base_commit,
-                        environment_setup_commit=issue.linked_pr.base_commit,
-                    )
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._create_data_point_from_issue, issue): idx
+                for idx, issue in enumerate(closed_issues)
+            }
+
+            for future in tqdm(
+                as_completed(futures),
+                desc="Creating data points",
+                total=len(closed_issues),
+            ):
+                data_point = future.result()
+                if data_point is not None:
                     data_points.append(data_point)
-                except Exception:
-                    pass
 
         return SWEBenchDataset(data_points=data_points)
