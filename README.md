@@ -29,12 +29,8 @@ analyzer = SWEBenchDataGenerator(
     gold_patch_ignore_dirs=[".github", "cypress-tests", "cypress-test-files"],
     test_dirs=["cypress-tests", "cypress-test-files"],
 )
-
-data_points = analyzer.fetch_issues(max_issues=50)
-
-# export to csv
-data_points.export_to_csv("swebench_dataset.csv")
-
-# export to huggingface
-data_points.export_to_huggingface("geekyrakshit/hyperswitch")
+issues = analyzer.generate_issues(max_issues=300)
+print(f"{analyzer.issues_page_counter=}")
+data_points = analyzer.generate_data_points(issues)
+data_points.export_to_huggingface("geekyrakshit/hyperswitch", append_to_dataset=True)
 ```

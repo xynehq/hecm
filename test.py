@@ -16,4 +16,4 @@ analyzer = SWEBenchDataGenerator(
 issues = analyzer.generate_issues(max_issues=300)
 print(f"{analyzer.issues_page_counter=}")
 data_points = analyzer.generate_data_points(issues)
-data_points.export_to_huggingface("geekyrakshit/hyperswitch")
+data_points.export_to_huggingface("geekyrakshit/hyperswitch", append_to_dataset=True)

@@ -82,21 +82,24 @@ class SWEBenchDataGenerator:
         )
 
     def get_patch(self, pr_number: int) -> str:
-        url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
-        headers = self.headers.copy()
-        headers["Accept"] = "application/vnd.github.v3.diff"
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
+        try:
+            url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
+            headers = self.headers.copy()
+            headers["Accept"] = "application/vnd.github.v3.diff"
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
 
-        gold_patch = response.text
-        for dir in self.gold_patch_ignore_dirs:
-            gold_patch = remove_dir_from_diff(gold_patch, dir)
+            gold_patch = response.text
+            for dir in self.gold_patch_ignore_dirs:
+                gold_patch = remove_dir_from_diff(gold_patch, dir)
 
-        test_patch = response.text
-        for dir in self.test_dirs:
-            test_patch = keep_only_dir_from_diff(test_patch, dir)
+            test_patch = response.text
+            for dir in self.test_dirs:
+                test_patch = keep_only_dir_from_diff(test_patch, dir)
 
-        return gold_patch, test_patch
+            return gold_patch, test_patch
+        except:
+            return "", ""
 
     def fetch_issues(
         self,
