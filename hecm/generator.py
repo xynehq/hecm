@@ -1,3 +1,5 @@
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Union
 
@@ -202,12 +204,27 @@ class SWEBenchDataGenerator:
 
     def generate_issues(
         self,
+        issue_state: str = "closed",
         max_issues: Optional[int] = None,
-        max_workers: int = 10,
+        save_to: Optional[os.PathLike] = None,
     ) -> List[GithubIssue]:
-        issues = self.fetch_issues("closed", max_issues)
+        issues = self.fetch_issues(issue_state, max_issues)
 
-        # Parallelize fetching linked PRs
+        if save_to:
+            with open(save_to, "w") as f:
+                serialized_issues = {
+                    "issues": [issue.model_dump_json() for issue in issues]
+                }
+                json.dump(serialized_issues, f)
+
+        return issues
+
+    def generate_linked_prs(
+        self,
+        issues: List[GithubIssue],
+        max_workers: int = 10,
+        save_to: Optional[os.PathLike] = None,
+    ) -> List[GithubIssue]:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._fetch_linked_pr_for_issue, issue): idx
@@ -223,6 +240,13 @@ class SWEBenchDataGenerator:
                 result = future.result()
                 if result is not None:
                     issues[idx] = result
+
+        if save_to:
+            with open(save_to, "w") as f:
+                serialized_issues = {
+                    "issues": [issue.model_dump_json() for issue in issues]
+                }
+                json.dump(serialized_issues, f)
 
         return issues
 
