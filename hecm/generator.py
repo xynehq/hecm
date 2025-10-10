@@ -8,20 +8,20 @@ from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
 
 from hecm.schemas import (
+    CodingAgentDataPoint,
+    CodingAgentDataset,
     GithubIssue,
     LinkedPR,
     PRComment,
-    SWEBenchDataPoint,
-    SWEBenchDataset,
 )
 from hecm.utils import (
-    get_last_release_before_pr_merge,
+    # get_last_release_before_pr_merge,
     keep_only_dir_from_diff,
     remove_dir_from_diff,
 )
 
 
-class SWEBenchDataGenerator:
+class CodingAgentDataGenerator:
     def __init__(
         self,
         repo_owner: str,
@@ -173,7 +173,7 @@ class SWEBenchDataGenerator:
 
     def _create_data_point_from_issue(
         self, issue: GithubIssue
-    ) -> Optional[SWEBenchDataPoint]:
+    ) -> Optional[CodingAgentDataPoint]:
         """Helper method to create a data point from an issue."""
         if not issue.linked_pr:
             return None
@@ -183,7 +183,7 @@ class SWEBenchDataGenerator:
 
         if issue.linked_pr is not None:
             try:
-                return SWEBenchDataPoint(
+                return CodingAgentDataPoint(
                     repo=f"{self.repo_owner}/{self.repo_name}",
                     instance_id=f"{self.repo_owner}__{self.repo_name}-{issue.number}",
                     problem_statement=f"Bug: {issue.title}\n\n\n\n{issue_body}",
@@ -191,11 +191,11 @@ class SWEBenchDataGenerator:
                     test_patch=test_patch,
                     created_at=issue.linked_pr.created_at,
                     hints_text=issue.linked_pr.get_hints_text(),
-                    version=get_last_release_before_pr_merge(
-                        self.repo_owner, self.repo_name, issue.linked_pr.number
-                    )["tag_name"],
+                    # version=get_last_release_before_pr_merge(
+                    #     self.repo_owner, self.repo_name, issue.linked_pr.number
+                    # )["tag_name"],
                     base_commit=issue.linked_pr.base_commit,
-                    environment_setup_commit=issue.linked_pr.base_commit,
+                    # environment_setup_commit=issue.linked_pr.base_commit,
                 )
             except ValueError:
                 return None
@@ -252,8 +252,8 @@ class SWEBenchDataGenerator:
 
     def generate_data_points(
         self, issues: List[GithubIssue], max_workers: int = 10
-    ) -> SWEBenchDataset:
-        data_points: List[SWEBenchDataPoint] = []
+    ) -> CodingAgentDataset:
+        data_points: List[CodingAgentDataPoint] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._create_data_point_from_issue, issue): idx
@@ -268,4 +268,4 @@ class SWEBenchDataGenerator:
                 data_point = future.result()
                 if data_point is not None:
                     data_points.append(data_point)
-        return SWEBenchDataset(data_points=data_points)
+        return CodingAgentDataset(data_points=data_points)
