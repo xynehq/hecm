@@ -48,6 +48,7 @@ class CodingAgentDataPoint(BaseModel):
     # version: str
     base_commit: str
     # environment_setup_commit: str
+    script_to_run_tests: str = "unknown"
 
 
 class CodingAgentDataset(BaseModel):
@@ -57,7 +58,7 @@ class CodingAgentDataset(BaseModel):
         return len(self.data_points)
 
     def export_to_csv(self, filename: str):
-        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit\n"
+        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit, script_to_run_tests\n"
         for data_point in tqdm(self.data_points, desc="Exporting to CSV"):
             content += f"{data_point.repo}, "
             content += f"{data_point.instance_id}, "
@@ -69,6 +70,7 @@ class CodingAgentDataset(BaseModel):
             # content += f"{data_point.version}, "
             content += f"{data_point.base_commit}, "
             # content += f"{data_point.environment_setup_commit}\n"
+            content += f"{data_point.script_to_run_tests}\n"
         with open(filename, "w") as f:
             f.write(content)
 
