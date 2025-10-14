@@ -7,15 +7,14 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
 
-from hecm.schemas import (
+from hecm.dataset_generation.schemas import (
     CodingAgentDataPoint,
     CodingAgentDataset,
     GithubIssue,
     LinkedPR,
     PRComment,
 )
-from hecm.utils import (
-    # get_last_release_before_pr_merge,
+from hecm.dataset_generation.utils import (
     keep_only_dir_from_diff,
     remove_dir_from_diff,
 )

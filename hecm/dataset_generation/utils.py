@@ -8,7 +8,7 @@ from typing import Iterable, List, Optional, Union
 import msgpack
 import requests
 
-from hecm.schemas import GithubIssue
+from hecm.dataset_generation.schemas import GithubIssue
 
 
 def remove_dir_from_diff(patch: str, directory: str) -> str:
