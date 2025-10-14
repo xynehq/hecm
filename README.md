@@ -37,10 +37,14 @@ analyzer = CodingAgentDataGenerator(
     ],
     test_dirs=["cypress-tests", "cypress-test-files"],
 )
-issues = analyzer.generate_issues(save_to="data/issues/juspay___hyperswitch.json")
+issues = analyzer.generate_issues(
+    save_to="data/issues/juspay___hyperswitch.json"
+)
 issues_with_linked_prs = analyzer.generate_linked_prs(
     issues, save_to="data/issues/juspay___hyperswitch.json"
 )
 data_points = analyzer.generate_data_points(issues_with_linked_prs)
-data_points.export_to_huggingface("geekyrakshit/rust-dev", append_to_dataset=False)
+data_points.export_to_huggingface(
+    "geekyrakshit/rust-dev", append_to_dataset=False
+)
 ```
