@@ -37,10 +37,12 @@ class BaseSandboxedExecutor:
         image: str,
         working_dir: str = "/workspace",
         environment: Dict[str, str] = None,
+        show_output_logs: bool = True,
     ):
         self.image = image
         self.working_dir = working_dir
         self.environment = environment
+        self.show_output_logs = show_output_logs
 
         self.client = docker.from_env()
         self.container = None
@@ -96,19 +98,18 @@ class BaseSandboxedExecutor:
                 for chunk in self.client.api.exec_start(exec_id["Id"], stream=True):
                     decoded_chunk = chunk.decode("utf-8")
                     output_lines.append(decoded_chunk)
-                    # Print output in real-time
-                    print(decoded_chunk, end="")
+                    if self.show_output_logs:
+                        rich.print(f"[dim]{decoded_chunk}[/dim]", end="")
 
                 # Get the exit code after execution completes
                 exec_inspect = self.client.api.exec_inspect(exec_id["Id"])
                 exit_code = exec_inspect["ExitCode"]
 
-                # Combine all output
-                output = "".join(output_lines)
-
                 results.append(
                     CommandExecutionResult(
-                        command=command, exit_code=exit_code, output=output
+                        command=command,
+                        exit_code=exit_code,
+                        output="".join(output_lines),
                     )
                 )
 
