@@ -2,17 +2,22 @@ import os
 from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
-from hecm.eval_harness.test_execution.base import BaseTestExecutor
+from hecm.eval_harness.test_execution.base import BaseSandboxedExecutor
 
 
-class JuspayHyperswitchTestExecutor(BaseTestExecutor):
+class JuspayHyperswitchTestExecutor(BaseSandboxedExecutor):
     """Executes tests for Juspay Hyperswitch in a Docker container with Rust.
 
     !!! example
         ```python
+        import rich
+        import weave
         from datasets import load_dataset
+
         from hecm.dataset_generation.schemas import CodingAgentDataPoint
         from hecm.eval_harness.test_execution import JuspayHyperswitchTestExecutor
+
+        weave.init(project_name="hyperswitch")
 
         dataset = load_dataset("geekyrakshit/rust-dev", split="train")
         data_point = CodingAgentDataPoint.model_validate(dataset[0])
@@ -32,8 +37,10 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
         image: str = "rust:latest",
         working_dir: str = "/workspace",
         environment: Dict[str, str] = None,
+        cypress_test_suffix: str = ":payments",
     ):
         super().__init__(image=image, working_dir=working_dir, environment=environment)
+        self.cypress_test_suffix = cypress_test_suffix
 
     def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
         patch_file = os.path.join(repo_dir, "changes.patch")
@@ -56,7 +63,7 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
             # install cypress dependencies
             f"cd {test_dir} && npm install",
             # run all tests in a headless manner
-            f"cd {test_dir} && npm run cypress:ci"
+            f"cd {test_dir} && npm run cypress{self.cypress_test_suffix}",
         ]
 
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:

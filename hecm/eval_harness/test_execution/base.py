@@ -1,9 +1,8 @@
 from abc import abstractmethod
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import docker
 import rich
-import weave
 from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
@@ -23,8 +22,8 @@ class DataPointExecutionSummary(BaseModel):
     command_results: List[CommandExecutionResult]
 
 
-class BaseTestExecutor:
-    """Executes tests in a Docker container.
+class BaseSandboxedExecutor:
+    """Executes commands/code in a sandboxed Docker container.
 
     Args:
         image (str): Docker image to use (default: rust:latest)
@@ -82,27 +81,34 @@ class BaseTestExecutor:
                     f"[yellow]Executing command {i}/{len(commands)}: {command}[/yellow]"
                 )
 
-                exec_result = self.container.exec_run(
+                # Start execution with streaming enabled
+                exec_id = self.client.api.exec_create(
+                    self.container.id,
                     cmd=["sh", "-c", command],
                     workdir=self.working_dir,
                     environment=self.environment or {},
-                    demux=False,  # Combine stdout and stderr
                 )
 
-                output = (
-                    exec_result.output.decode("utf-8") if exec_result.output else ""
-                )
-                exit_code = exec_result.exit_code
+                # Stream the output in real-time
+                output_lines = []
+                for chunk in self.client.api.exec_start(exec_id["Id"], stream=True):
+                    decoded_chunk = chunk.decode("utf-8")
+                    output_lines.append(decoded_chunk)
+                    # Print output in real-time
+                    print(decoded_chunk, end="")
+
+                # Get the exit code after execution completes
+                exec_inspect = self.client.api.exec_inspect(exec_id["Id"])
+                exit_code = exec_inspect["ExitCode"]
+
+                # Combine all output
+                output = "".join(output_lines)
 
                 results.append(
                     CommandExecutionResult(
                         command=command, exit_code=exit_code, output=output
                     )
                 )
-
-                # Print output
-                if output:
-                    rich.print(f"[dim]{output}[/dim]")
 
                 if exit_code != 0:
                     rich.print(f"[red]Command failed with exit code {exit_code}[/red]")
@@ -119,7 +125,6 @@ class BaseTestExecutor:
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
         pass
 
-    @weave.op
     def execute(self, data_point: CodingAgentDataPoint) -> DataPointExecutionSummary:
         """
         Execute tests for a given data point.
@@ -144,13 +149,13 @@ class BaseTestExecutor:
         # Analyze results
         all_succeeded = all(r.exit_code == 0 for r in results)
 
-        return {
-            "instance_id": data_point.instance_id,
-            "repo": data_point.repo,
-            "base_commit": data_point.base_commit,
-            "all_commands_executed_successfully": all_succeeded,
-            "command_results": results,
-        }
+        return DataPointExecutionSummary(
+            instance_id=data_point.instance_id,
+            repo=data_point.repo,
+            base_commit=data_point.base_commit,
+            all_commands_executed_successfully=all_succeeded,
+            command_results=results,
+        )
 
     def cleanup(self):
         self.container.stop()
