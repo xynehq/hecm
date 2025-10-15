@@ -65,4 +65,5 @@ data_point = CodingAgentDataPoint.model_validate(dataset[0])
 executor = JuspayHyperswitchTestExecutor()
 results = executor.execute(data_point)
 rich.print(results)
+executor.cleanup()
 ```

@@ -137,7 +137,7 @@ class BaseTestExecutor:
             "instance_id": data_point.instance_id,
             "repo": data_point.repo,
             "base_commit": data_point.base_commit,
-            "all_tests_passed": all_succeeded,
+            "all_commands_executed_successfully": all_succeeded,
             "command_results": results,
         }
 

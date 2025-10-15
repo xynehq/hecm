@@ -18,8 +18,8 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
         data_point = CodingAgentDataPoint.model_validate(dataset[0])
         executor = JuspayHyperswitchTestExecutor()
         results = executor.execute(data_point)
+        executor.cleanup()
         ```
-
 
     Args:
         image (str): Docker image to use (default: rust:latest)
@@ -35,6 +35,20 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
     ):
         super().__init__(image=image, working_dir=working_dir, environment=environment)
 
+    def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
+        patch_file = os.path.join(repo_dir, "changes.patch")
+        patch_file_generation_command = f"""cat > {patch_file} << 'EOF'
+{patch}
+EOF"""
+        return [
+            # Generate the patch file
+            patch_file_generation_command,
+            # Check if the patch is valid
+            f"cd {repo_dir} && git apply --check {patch_file}",
+            # Apply the patch
+            f"cd {repo_dir} && git apply changes.patch",
+        ]
+
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
         repo_dir = os.path.join(self.working_dir, "repo")
 
@@ -45,7 +59,7 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
             # Checkout the base commit
             f"cd {repo_dir} && git checkout {data_point.base_commit}",
             # Apply the test patch
-            # f"cd {repo_dir} && echo '{data_point.patch}' | git apply -",
+            *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
             # Show the git diff
             f"cd {repo_dir} && git diff",
         ]
