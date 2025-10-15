@@ -1,8 +1,9 @@
 from abc import abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import docker
 import rich
+import weave
 from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
@@ -61,6 +62,7 @@ class BaseSandboxedExecutor:
             remove=False,  # Don't auto-remove so we can inspect
         )
 
+    @weave.op
     def execute_commands_in_container(
         self, commands: List[str]
     ) -> List[CommandExecutionResult]:
@@ -125,12 +127,16 @@ class BaseSandboxedExecutor:
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
         pass
 
-    def execute(self, data_point: CodingAgentDataPoint) -> DataPointExecutionSummary:
+    @weave.op
+    def execute(
+        self, data_point: CodingAgentDataPoint, gold_patch: Optional[str] = None
+    ) -> DataPointExecutionSummary:
         """
         Execute tests for a given data point.
 
         Args:
-            data_point: The coding agent data point containing test information
+            data_point (CodingAgentDataPoint): The coding agent data point containing test information
+            gold_patch (Optional[str]): The gold patch to apply to the repository
 
         Returns (DataPointExecutionSummary): Execution summary of the given data point.
         """
