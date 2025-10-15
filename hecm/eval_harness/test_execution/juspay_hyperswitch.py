@@ -37,9 +37,7 @@ class JuspayHyperswitchTestExecutor(BaseTestExecutor):
 
     def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
         patch_file = os.path.join(repo_dir, "changes.patch")
-        patch_file_generation_command = f"""cat > {patch_file} << 'EOF'
-{patch}
-EOF"""
+        patch_file_generation_command = f"""cat > {patch_file} << 'EOF'\n{patch}\nEOF"""
         return [
             # Generate the patch file
             patch_file_generation_command,
@@ -47,6 +45,18 @@ EOF"""
             f"cd {repo_dir} && git apply --check {patch_file}",
             # Apply the patch
             f"cd {repo_dir} && git apply changes.patch",
+        ]
+
+    def get_cypress_test_commands(self, repo_dir: os.PathLike) -> List[str]:
+        test_dir = os.path.join(repo_dir, "cypress-tests-v2")
+        return [
+            # install nodejs and npm
+            "apt-get update",
+            "apt-get install -y nodejs npm",
+            # install cypress dependencies
+            f"cd {test_dir} && npm install",
+            # run all tests in a headless manner
+            f"cd {test_dir} && npm run cypress:ci"
         ]
 
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
@@ -62,5 +72,7 @@ EOF"""
             *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
             # Show the git diff
             f"cd {repo_dir} && git diff",
+            # execute cypress tests
+            *self.get_cypress_test_commands(repo_dir=repo_dir),
         ]
         return commands

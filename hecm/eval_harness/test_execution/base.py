@@ -3,8 +3,24 @@ from typing import Any, Dict, List
 
 import docker
 import rich
+import weave
+from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+
+
+class CommandExecutionResult(BaseModel):
+    command: str
+    exit_code: int
+    output: str
+
+
+class DataPointExecutionSummary(BaseModel):
+    instance_id: str
+    repo: str
+    base_commit: str
+    all_commands_executed_successfully: bool
+    command_results: List[CommandExecutionResult]
 
 
 class BaseTestExecutor:
@@ -48,20 +64,16 @@ class BaseTestExecutor:
 
     def execute_commands_in_container(
         self, commands: List[str]
-    ) -> List[Dict[str, Any]]:
+    ) -> List[CommandExecutionResult]:
         """
         Execute a list of commands sequentially in a Docker container.
 
         Args:
             commands: List of shell commands to execute
 
-        Returns:
-            List of dictionaries containing command results with keys:
-            - command: The command that was executed
-            - exit_code: Exit code of the command
-            - output: Combined stdout/stderr output
+        Returns (List[CommandExecutionResult]): List of `CommandExecutionResult`s
         """
-        results = []
+        results: List[CommandExecutionResult] = []
 
         try:
             # Execute each command sequentially
@@ -82,12 +94,11 @@ class BaseTestExecutor:
                 )
                 exit_code = exec_result.exit_code
 
-                result = {
-                    "command": command,
-                    "exit_code": exit_code,
-                    "output": output,
-                }
-                results.append(result)
+                results.append(
+                    CommandExecutionResult(
+                        command=command, exit_code=exit_code, output=output
+                    )
+                )
 
                 # Print output
                 if output:
@@ -108,15 +119,15 @@ class BaseTestExecutor:
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
         pass
 
-    def execute(self, data_point: CodingAgentDataPoint) -> Dict[str, Any]:
+    @weave.op
+    def execute(self, data_point: CodingAgentDataPoint) -> DataPointExecutionSummary:
         """
         Execute tests for a given data point.
 
         Args:
             data_point: The coding agent data point containing test information
 
-        Returns:
-            Dictionary containing test execution results
+        Returns (DataPointExecutionSummary): Execution summary of the given data point.
         """
         rich.print(
             f"[bold cyan]Executing tests for: {data_point.instance_id}[/bold cyan]"
@@ -131,7 +142,7 @@ class BaseTestExecutor:
         results = self.execute_commands_in_container(commands=commands)
 
         # Analyze results
-        all_succeeded = all(r["exit_code"] == 0 for r in results)
+        all_succeeded = all(r.exit_code == 0 for r in results)
 
         return {
             "instance_id": data_point.instance_id,

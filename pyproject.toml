@@ -16,7 +16,7 @@ dependencies = [
     "requests>=2.32.0",
     "sweagent",
     "tqdm>=4.67.1",
-    "weave>=0.52.8",
+    "weave>=0.52.9",
 ]
 
 [project.scripts]
