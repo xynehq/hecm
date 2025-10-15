@@ -13,6 +13,8 @@ uv pip install -e .
 
 ## Usage
 
+### Generating Coding Agent Data for a given repository
+
 ```python
 import os
 
@@ -45,6 +47,22 @@ issues_with_linked_prs = analyzer.generate_linked_prs(
 )
 data_points = analyzer.generate_data_points(issues_with_linked_prs)
 data_points.export_to_huggingface(
-    "geekyrakshit/rust-dev", append_to_dataset=False
+    "juspay/hyperswitch", append_to_dataset=False
 )
+```
+
+### Evaluating Coding Agent Data for a given repository
+
+```python
+import rich
+from datasets import load_dataset
+
+from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.test_execution import JuspayHyperswitchTestExecutor
+
+dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+data_point = CodingAgentDataPoint.model_validate(dataset[0])
+executor = JuspayHyperswitchTestExecutor()
+results = executor.execute(data_point)
+rich.print(results)
 ```
