@@ -142,12 +142,6 @@ class BaseTestExecutor:
         }
 
     def cleanup(self):
-        if self.container:
-            try:
-                self.container.stop()
-                self.container.remove()
-                rich.print("[cyan]Container cleaned up[/cyan]")
-            except Exception as e:
-                rich.print(
-                    f"[yellow]Warning: Failed to clean up container: {e}[/yellow]"
-                )
+        self.container.stop()
+        self.container.remove()
+        rich.print("[cyan]Container cleaned up[/cyan]")
