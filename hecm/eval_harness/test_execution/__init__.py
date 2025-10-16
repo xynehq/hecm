@@ -1,5 +1,9 @@
 from hecm.eval_harness.test_execution.juspay_hyperswitch import (
-    JuspayHyperswitchTestExecutor,
+    JuspayHyperswitchLocalTestExecutor,
+    JuspayHyperswitchSandboxedTestExecutor,
 )
 
-__all__ = ["JuspayHyperswitchTestExecutor"]
+__all__ = [
+    "JuspayHyperswitchSandboxedTestExecutor",
+    "JuspayHyperswitchLocalTestExecutor",
+]
