@@ -1,4 +1,6 @@
 import os
+import time
+import subprocess
 from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
@@ -12,7 +14,7 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
     """Executes tests for Juspay Hyperswitch in a Docker container with Rust.
 
     !!! example
-        ```python
+```python
         import weave
         from datasets import load_dataset
 
@@ -32,7 +34,7 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
 
         weave.init(project_name="hyperswitch")
         test_cypress_execution()
-        ```
+```
 
     Args:
         image (str): Docker image to use (default: rust:latest)
@@ -96,8 +98,7 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
 class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
     """Executes tests for Juspay Hyperswitch in the local environment.
 
-    !!! example
-        ```python
+```
         import weave
         from datasets import load_dataset
 
@@ -117,7 +118,7 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
 
         weave.init(project_name="hyperswitch")
         test_cypress_execution()
-        ```
+```
 
     Args:
         environment (Dict[str, str]): Environment variables to set (default: None)
@@ -130,9 +131,38 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         environment: Dict[str, str] = None,
         show_output_logs: bool = True,
         cypress_test_suffix: str = ":payments",
+        health_check_url: str = "http://localhost:8080/health",
+        health_check_timeout: int = 3000,
+        health_check_interval: int = 5,
     ):
         super().__init__(environment=environment, show_output_logs=show_output_logs)
         self.cypress_test_suffix = cypress_test_suffix
+        self.health_check_url = health_check_url
+        self.health_check_timeout = health_check_timeout
+        self.health_check_interval = health_check_interval
+
+    def poll_hyperswitch(self) -> bool:
+        start_time = time.time()
+        print(f"Polling {self.health_check_url} for health check...")
+        while time.time() - start_time < self.health_check_timeout:
+            try:
+                result = subprocess.run(
+                    ["curl", "--head", "--request", "GET", self.health_check_url],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if self.show_output_logs:
+                    print(f"Health check attempt: status code {result.returncode}")
+                if result.returncode == 0:
+                    if self.show_output_logs:
+                        print(f"Hyperswitch is ready at {self.health_check_url}")
+                    return True
+            except subprocess.TimeoutExpired:
+                if self.show_output_logs:
+                    print("Health check timed out")
+            time.sleep(self.health_check_interval)
+        
+        raise TimeoutError(f"Hyperswitch health check failed after {self.health_check_timeout} seconds")
 
     def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
         patch_file = os.path.join(repo_dir, "changes.patch")
@@ -155,7 +185,7 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             # install cypress dependencies
             f"cd {test_dir} && npm install",
             # run all tests in a headless manner
-            f"cd {test_dir} && npm run cypress{self.cypress_test_suffix}",
+            f"cd {test_dir} && npx cypress run",
         ]
 
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
@@ -177,3 +207,25 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             *self.get_cypress_test_commands(repo_dir=repo_dir),
         ]
         return commands
+
+    def execute(self, data_point: CodingAgentDataPoint):
+        repo_dir = os.path.join(self.working_dir.name, "repo")
+        
+        commands_before_health_check = [
+            f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
+            f"cd {repo_dir} && git checkout {data_point.base_commit}",
+            *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
+            f"cd {repo_dir} && git diff",
+            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+        ]
+        
+        for cmd in commands_before_health_check:
+            subprocess.run(cmd, shell=True, check=True, env=self.environment)
+        
+        self.poll_hyperswitch()
+        env = self.environment.copy() if self.environment else {}
+        env['CYPRESS_BASEURL'] = 'http://localhost:8080'
+        
+        commands_after_health_check = self.get_cypress_test_commands(repo_dir=repo_dir)
+        for cmd in commands_after_health_check:
+            subprocess.run(cmd, shell=True, check=True, env=self.environment)
