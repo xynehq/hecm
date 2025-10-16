@@ -3,18 +3,20 @@ name = "hecm"
 dynamic = ["version"]
 description = "Epub reader for the 21st century"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "bs4>=0.0.2",
     "datasets>=4.1.1",
+    "docker>=7.1.0",
     "dspy>=3.0.3",
     "gitpython>=3.1.45",
     "msgpack>=1.1.1",
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.0",
+    "sweagent",
     "tqdm>=4.67.1",
-    "weave>=0.52.8",
+    "weave>=0.52.9",
 ]
 
 [project.scripts]
@@ -68,3 +70,6 @@ select = ["I"]
 known-first-party = ["hecm"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
+
+[tool.uv.sources]
+sweagent = { git = "https://github.com/SWE-agent/SWE-agent" }

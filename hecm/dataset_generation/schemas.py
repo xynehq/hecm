@@ -37,7 +37,7 @@ class GithubIssue(BaseModel):
     linked_pr: Optional[LinkedPR] = None
 
 
-class SWEBenchDataPoint(BaseModel):
+class CodingAgentDataPoint(BaseModel):
     repo: str
     instance_id: str
     problem_statement: str
@@ -45,19 +45,20 @@ class SWEBenchDataPoint(BaseModel):
     test_patch: str
     created_at: str
     hints_text: str
-    version: str
+    # version: str
     base_commit: str
-    environment_setup_commit: str
+    # environment_setup_commit: str
+    script_to_run_tests: str = "unknown"
 
 
-class SWEBenchDataset(BaseModel):
-    data_points: List[SWEBenchDataPoint]
+class CodingAgentDataset(BaseModel):
+    data_points: List[CodingAgentDataPoint]
 
     def __len__(self):
         return len(self.data_points)
 
     def export_to_csv(self, filename: str):
-        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit\n"
+        content = "repo, instance_id, problem_statement, patch, test_patch, created_at, hints_text, version, base_commit, environment_setup_commit, script_to_run_tests\n"
         for data_point in tqdm(self.data_points, desc="Exporting to CSV"):
             content += f"{data_point.repo}, "
             content += f"{data_point.instance_id}, "
@@ -66,9 +67,10 @@ class SWEBenchDataset(BaseModel):
             content += f"{data_point.test_patch}, "
             content += f"{data_point.created_at}, "
             content += f"{data_point.hints_text}, "
-            content += f"{data_point.version}, "
+            # content += f"{data_point.version}, "
             content += f"{data_point.base_commit}, "
-            content += f"{data_point.environment_setup_commit}\n"
+            # content += f"{data_point.environment_setup_commit}\n"
+            content += f"{data_point.script_to_run_tests}\n"
         with open(filename, "w") as f:
             f.write(content)
 

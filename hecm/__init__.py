@@ -1,3 +1,3 @@
-from hecm.generator import SWEBenchDataGenerator
+from hecm.dataset_generation import CodingAgentDataGenerator
 
-__all__ = ["SWEBenchDataGenerator"]
+__all__ = ["CodingAgentDataGenerator"]

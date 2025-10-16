@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import time
@@ -6,6 +7,8 @@ from typing import Iterable, List, Optional, Union
 
 import msgpack
 import requests
+
+from hecm.dataset_generation.schemas import GithubIssue
 
 
 def remove_dir_from_diff(patch: str, directory: str) -> str:
@@ -243,3 +246,9 @@ def get_last_release_before_pr_merge(
             }
 
     return best_release
+
+
+def load_issues(path: os.PathLike) -> List[GithubIssue]:
+    with open(path, "r") as f:
+        issues = json.load(f)
+    return [GithubIssue.model_validate_json(issue) for issue in issues["issues"]]

@@ -13,24 +13,57 @@ uv pip install -e .
 
 ## Usage
 
+### Generating Coding Agent Data for a given repository
+
 ```python
 import os
 
 from dotenv import load_dotenv
 
-from hecm import SWEBenchDataGenerator
+from hecm.dataset_generation import CodingAgentDataGenerator
+from hecm.dataset_generation.utils import load_issues
 
 load_dotenv()
 
-analyzer = SWEBenchDataGenerator(
+analyzer = CodingAgentDataGenerator(
     repo_owner="juspay",
     repo_name="hyperswitch",
     github_token=os.getenv("GITHUB_TOKEN"),
-    gold_patch_ignore_dirs=[".github", "cypress-tests", "cypress-test-files"],
+    gold_patch_ignore_dirs=[
+        ".github",
+        ".devcontainer",
+        "api-reference",
+        "cypress-tests",
+        "cypress-test-files",
+        "docs",
+    ],
     test_dirs=["cypress-tests", "cypress-test-files"],
 )
-issues = analyzer.generate_issues(max_issues=300)
-print(f"{analyzer.issues_page_counter=}")
-data_points = analyzer.generate_data_points(issues)
-data_points.export_to_huggingface("geekyrakshit/hyperswitch", append_to_dataset=True)
+issues = analyzer.generate_issues(
+    save_to="data/issues/juspay___hyperswitch.json"
+)
+issues_with_linked_prs = analyzer.generate_linked_prs(
+    issues, save_to="data/issues/juspay___hyperswitch.json"
+)
+data_points = analyzer.generate_data_points(issues_with_linked_prs)
+data_points.export_to_huggingface(
+    "juspay/hyperswitch", append_to_dataset=False
+)
+```
+
+### Evaluating Coding Agent Data for a given repository
+
+```python
+import rich
+from datasets import load_dataset
+
+from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.test_execution import JuspayHyperswitchTestExecutor
+
+dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+data_point = CodingAgentDataPoint.model_validate(dataset[0])
+executor = JuspayHyperswitchTestExecutor()
+results = executor.execute(data_point)
+rich.print(results)
+executor.cleanup()
 ```
