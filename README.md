@@ -11,6 +11,8 @@ cd hecm
 uv pip install -e .
 ```
 
+If you want to use a sandboxed environment, you need to install [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install). Also, make sure that the docker daemon is running and you have the necessary permissions to run docker commands. Note that for certain local executors like `JuspayHyperswitchLocalTestExecutor` as well, you need to have docker and docker compose installed.
+
 ## Usage
 
 ### Generating Coding Agent Data for a given repository
