@@ -122,12 +122,17 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
     Args:
         environment (Dict[str, str]): Environment variables to set (default: None)
         show_output_logs (bool): Whether to show output logs (default: True)
+        cypress_test_suffix (str): Suffix to add to the cypress test command (default: ":payments")
     """
 
     def __init__(
-        self, environment: Dict[str, str] = None, show_output_logs: bool = True
+        self,
+        environment: Dict[str, str] = None,
+        show_output_logs: bool = True,
+        cypress_test_suffix: str = ":payments",
     ):
         super().__init__(environment=environment, show_output_logs=show_output_logs)
+        self.cypress_test_suffix = cypress_test_suffix
 
     def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
         patch_file = os.path.join(repo_dir, "changes.patch")
