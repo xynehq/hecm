@@ -172,7 +172,7 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             # Show the git diff
             f"cd {repo_dir} && git diff",
             # set up hyperswitch development environment
-            "cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
             # execute cypress tests
             *self.get_cypress_test_commands(repo_dir=repo_dir),
         ]
