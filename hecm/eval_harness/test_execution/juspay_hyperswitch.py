@@ -1,7 +1,7 @@
 import os
 import subprocess
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
 from hecm.eval_harness.test_execution.base import (
@@ -76,7 +76,16 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
             f"cd {test_dir} && npm run cypress{self.cypress_test_suffix}",
         ]
 
-    def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
+    def get_commands(
+        self, data_point: CodingAgentDataPoint, predicted_patch: Optional[str] = None
+    ) -> List[str]:
+        """
+        Get commands for executing tests for a given data point.
+
+        Args:
+            data_point: The data point to execute tests for
+            predicted_patch: The predicted patch to apply to the repository
+        """
         repo_dir = os.path.join(self.working_dir, "repo")
 
         # Prepare commands for test execution
@@ -86,7 +95,10 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
             # Checkout the base commit
             f"cd {repo_dir} && git checkout {data_point.base_commit}",
             # Apply the test patch
-            *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
+            *self.get_patch_commands(
+                patch=data_point.patch if predicted_patch is None else predicted_patch,
+                repo_dir=repo_dir,
+            ),
             # Show the git diff
             f"cd {repo_dir} && git diff",
             # execute cypress tests
@@ -210,13 +222,25 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         ]
         return commands
 
-    def execute(self, data_point: CodingAgentDataPoint):
+    def execute(
+        self, data_point: CodingAgentDataPoint, predicted_patch: Optional[str] = None
+    ):
+        """
+        Execute tests for a given data point.
+
+        Args:
+            data_point: The data point to execute tests for
+            predicted_patch: The predicted patch to apply to the repository
+        """
         repo_dir = os.path.join(self.working_dir.name, "repo")
 
         commands_before_health_check = [
             f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
             f"cd {repo_dir} && git checkout {data_point.base_commit}",
-            *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
+            *self.get_patch_commands(
+                patch=data_point.patch if predicted_patch is None else predicted_patch,
+                repo_dir=repo_dir,
+            ),
             f"cd {repo_dir} && git diff",
             f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
         ]

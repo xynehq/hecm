@@ -193,7 +193,9 @@ class BaseLocalExecutor(ABC):
         self.show_output_logs = show_output_logs
 
     @abstractmethod
-    def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
+    def get_commands(
+        self, data_point: CodingAgentDataPoint, predicted_patch: Optional[str] = None
+    ) -> List[str]:
         pass
 
     @weave.op
@@ -264,14 +266,14 @@ class BaseLocalExecutor(ABC):
 
     @weave.op
     def execute(
-        self, data_point: CodingAgentDataPoint, gold_patch: Optional[str] = None
+        self, data_point: CodingAgentDataPoint, predicted_patch: Optional[str] = None
     ) -> DataPointExecutionSummary:
         """
         Execute tests for a given data point.
 
         Args:
             data_point (CodingAgentDataPoint): The coding agent data point containing test information
-            gold_patch (Optional[str]): The gold patch to apply to the repository
+            predicted_patch (Optional[str]): The predicted patch to apply to the repository
 
         Returns (DataPointExecutionSummary): Execution summary of the given data point.
         """
@@ -282,7 +284,9 @@ class BaseLocalExecutor(ABC):
         rich.print(f"[cyan]Base commit: {data_point.base_commit}[/cyan]")
 
         # Get commands to execute
-        commands = self.get_commands(data_point)
+        commands = self.get_commands(
+            data_point=data_point, predicted_patch=predicted_patch
+        )
 
         # Execute commands
         results = self.execute_commands_locally(commands=commands)
