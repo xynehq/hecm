@@ -1,6 +1,6 @@
 import os
-import time
 import subprocess
+import time
 from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
@@ -13,33 +13,33 @@ from hecm.eval_harness.test_execution.base import (
 class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
     """Executes tests for Juspay Hyperswitch in a Docker container with Rust.
 
-    !!! example
-```python
-        import weave
-        from datasets import load_dataset
+        !!! example
+    ```python
+            import weave
+            from datasets import load_dataset
 
-        from hecm.dataset_generation.schemas import CodingAgentDataPoint
-        from hecm.eval_harness.test_execution import JuspayHyperswitchSandboxedTestExecutor
-
-
-        @weave.op
-        def test_cypress_execution():
-            dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-            data_point = CodingAgentDataPoint.model_validate(dataset[0])
-            executor = JuspayHyperswitchSandboxedTestExecutor(show_output_logs=True)
-            results = executor.execute(data_point)
-            executor.cleanup()
-            return results
+            from hecm.dataset_generation.schemas import CodingAgentDataPoint
+            from hecm.eval_harness.test_execution import JuspayHyperswitchSandboxedTestExecutor
 
 
-        weave.init(project_name="hyperswitch")
-        test_cypress_execution()
-```
+            @weave.op
+            def test_cypress_execution():
+                dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+                data_point = CodingAgentDataPoint.model_validate(dataset[0])
+                executor = JuspayHyperswitchSandboxedTestExecutor(show_output_logs=True)
+                results = executor.execute(data_point)
+                executor.cleanup()
+                return results
 
-    Args:
-        image (str): Docker image to use (default: rust:latest)
-        working_dir (str): Working directory inside the container (default: /workspace)
-        environment (Dict[str, str]): Environment variables to set in the container (default: None)
+
+            weave.init(project_name="hyperswitch")
+            test_cypress_execution()
+    ```
+
+        Args:
+            image (str): Docker image to use (default: rust:latest)
+            working_dir (str): Working directory inside the container (default: /workspace)
+            environment (Dict[str, str]): Environment variables to set in the container (default: None)
     """
 
     def __init__(
@@ -98,32 +98,32 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
 class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
     """Executes tests for Juspay Hyperswitch in the local environment.
 
-```
-        import weave
-        from datasets import load_dataset
+    ```
+            import weave
+            from datasets import load_dataset
 
-        from hecm.dataset_generation.schemas import CodingAgentDataPoint
-        from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
-
-
-        @weave.op
-        def test_cypress_execution():
-            dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-            data_point = CodingAgentDataPoint.model_validate(dataset[0])
-            executor = JuspayHyperswitchLocalTestExecutor(show_output_logs=True)
-            results = executor.execute(data_point)
-            executor.cleanup()
-            return results
+            from hecm.dataset_generation.schemas import CodingAgentDataPoint
+            from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
 
 
-        weave.init(project_name="hyperswitch")
-        test_cypress_execution()
-```
+            @weave.op
+            def test_cypress_execution():
+                dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+                data_point = CodingAgentDataPoint.model_validate(dataset[0])
+                executor = JuspayHyperswitchLocalTestExecutor(show_output_logs=True)
+                results = executor.execute(data_point)
+                executor.cleanup()
+                return results
 
-    Args:
-        environment (Dict[str, str]): Environment variables to set (default: None)
-        show_output_logs (bool): Whether to show output logs (default: True)
-        cypress_test_suffix (str): Suffix to add to the cypress test command (default: ":payments")
+
+            weave.init(project_name="hyperswitch")
+            test_cypress_execution()
+    ```
+
+        Args:
+            environment (Dict[str, str]): Environment variables to set (default: None)
+            show_output_logs (bool): Whether to show output logs (default: True)
+            cypress_test_suffix (str): Suffix to add to the cypress test command (default: ":payments")
     """
 
     def __init__(
@@ -161,8 +161,10 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
                 if self.show_output_logs:
                     print("Health check timed out")
             time.sleep(self.health_check_interval)
-        
-        raise TimeoutError(f"Hyperswitch health check failed after {self.health_check_timeout} seconds")
+
+        raise TimeoutError(
+            f"Hyperswitch health check failed after {self.health_check_timeout} seconds"
+        )
 
     def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
         patch_file = os.path.join(repo_dir, "changes.patch")
@@ -210,7 +212,7 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
 
     def execute(self, data_point: CodingAgentDataPoint):
         repo_dir = os.path.join(self.working_dir.name, "repo")
-        
+
         commands_before_health_check = [
             f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
             f"cd {repo_dir} && git checkout {data_point.base_commit}",
@@ -218,14 +220,14 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             f"cd {repo_dir} && git diff",
             f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
         ]
-        
+
         for cmd in commands_before_health_check:
             subprocess.run(cmd, shell=True, check=True, env=self.environment)
-        
+
         self.poll_hyperswitch()
         env = self.environment.copy() if self.environment else {}
-        env['CYPRESS_BASEURL'] = 'http://localhost:8080'
-        
+        env["CYPRESS_BASEURL"] = "http://localhost:8080"
+
         commands_after_health_check = self.get_cypress_test_commands(repo_dir=repo_dir)
         for cmd in commands_after_health_check:
             subprocess.run(cmd, shell=True, check=True, env=self.environment)

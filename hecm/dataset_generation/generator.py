@@ -14,10 +14,7 @@ from hecm.dataset_generation.schemas import (
     LinkedPR,
     PRComment,
 )
-from hecm.dataset_generation.utils import (
-    keep_only_dir_from_diff,
-    remove_dir_from_diff,
-)
+from hecm.utils.gh_utils import keep_only_dir_from_diff, remove_dir_from_diff
 
 
 class CodingAgentDataGenerator:
