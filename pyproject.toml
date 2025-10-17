@@ -10,11 +10,11 @@ dependencies = [
     "docker>=7.1.0",
     "dspy>=3.0.3",
     "gitpython>=3.1.45",
+    "mini-swe-agent>=1.14.2",
     "msgpack>=1.1.1",
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.0",
-    "sweagent",
     "tqdm>=4.67.1",
     "weave>=0.52.9",
 ]
@@ -70,6 +70,3 @@ select = ["I"]
 known-first-party = ["hecm"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
-
-[tool.uv.sources]
-sweagent = { git = "https://github.com/SWE-agent/SWE-agent" }

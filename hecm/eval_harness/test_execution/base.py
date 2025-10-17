@@ -1,3 +1,4 @@
+import os
 import subprocess
 from abc import ABC, abstractmethod
 from tempfile import TemporaryDirectory
@@ -50,6 +51,7 @@ class BaseSandboxedExecutor(ABC):
         self.client = docker.from_env()
         self.container = None
         self.create_container()
+        self.repo_dir = os.path.join(self.working_dir.name, "repo")
 
     def create_container(self):
         # Pull the image if not available
@@ -191,6 +193,7 @@ class BaseLocalExecutor(ABC):
         self.working_dir = TemporaryDirectory()
         self.environment = environment
         self.show_output_logs = show_output_logs
+        self.repo_dir = os.path.join(self.working_dir.name, "repo")
 
     @abstractmethod
     def get_commands(

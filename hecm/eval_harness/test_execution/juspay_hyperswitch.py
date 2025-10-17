@@ -64,8 +64,8 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
             f"cd {repo_dir} && git apply changes.patch",
         ]
 
-    def get_cypress_test_commands(self, repo_dir: os.PathLike) -> List[str]:
-        test_dir = os.path.join(repo_dir, "cypress-tests-v2")
+    def get_cypress_test_commands(self) -> List[str]:
+        test_dir = os.path.join(self.repo_dir, "cypress-tests-v2")
         return [
             # install nodejs and npm
             "apt-get update",
@@ -86,23 +86,21 @@ class JuspayHyperswitchSandboxedTestExecutor(BaseSandboxedExecutor):
             data_point: The data point to execute tests for
             predicted_patch: The predicted patch to apply to the repository
         """
-        repo_dir = os.path.join(self.working_dir, "repo")
-
         # Prepare commands for test execution
         commands = [
             # Clone the repository
-            f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
+            f"git clone https://github.com/{data_point.repo}.git {self.repo_dir}",
             # Checkout the base commit
-            f"cd {repo_dir} && git checkout {data_point.base_commit}",
+            f"cd {self.repo_dir} && git checkout {data_point.base_commit}",
             # Apply the test patch
             *self.get_patch_commands(
                 patch=data_point.patch if predicted_patch is None else predicted_patch,
-                repo_dir=repo_dir,
+                repo_dir=self.repo_dir,
             ),
             # Show the git diff
-            f"cd {repo_dir} && git diff",
+            f"cd {self.repo_dir} && git diff",
             # execute cypress tests
-            *self.get_cypress_test_commands(repo_dir=repo_dir),
+            *self.get_cypress_test_commands(repo_dir=self.repo_dir),
         ]
         return commands
 
@@ -178,20 +176,20 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             f"Hyperswitch health check failed after {self.health_check_timeout} seconds"
         )
 
-    def get_patch_commands(self, patch: str, repo_dir: os.PathLike) -> List[str]:
-        patch_file = os.path.join(repo_dir, "changes.patch")
+    def get_patch_commands(self, patch: str) -> List[str]:
+        patch_file = os.path.join(self.repo_dir, "changes.patch")
         patch_file_generation_command = f"""cat > {patch_file} << 'EOF'\n{patch}\nEOF"""
         return [
             # Generate the patch file
             patch_file_generation_command,
             # Check if the patch is valid
-            f"cd {repo_dir} && git apply --check {patch_file}",
+            f"cd {self.repo_dir} && git apply --check {patch_file}",
             # Apply the patch
-            f"cd {repo_dir} && git apply changes.patch",
+            f"cd {self.repo_dir} && git apply changes.patch",
         ]
 
-    def get_cypress_test_commands(self, repo_dir: os.PathLike) -> List[str]:
-        test_dir = os.path.join(repo_dir, "cypress-tests-v2")
+    def get_cypress_test_commands(self) -> List[str]:
+        test_dir = os.path.join(self.repo_dir, "cypress-tests-v2")
         return [
             # install nodejs and npm
             "apt-get update",
@@ -203,22 +201,20 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         ]
 
     def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
-        repo_dir = os.path.join(self.working_dir.name, "repo")
-
         # Prepare commands for test execution
         commands = [
             # Clone the repository
-            f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
+            f"git clone https://github.com/{data_point.repo}.git {self.repo_dir}",
             # Checkout the base commit
-            f"cd {repo_dir} && git checkout {data_point.base_commit}",
+            f"cd {self.repo_dir} && git checkout {data_point.base_commit}",
             # Apply the test patch
-            *self.get_patch_commands(patch=data_point.patch, repo_dir=repo_dir),
+            *self.get_patch_commands(patch=data_point.patch),
             # Show the git diff
-            f"cd {repo_dir} && git diff",
+            f"cd {self.repo_dir} && git diff",
             # set up hyperswitch development environment
-            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+            f"cd {self.repo_dir} && docker compose --file docker-compose-development.yml up -d",
             # execute cypress tests
-            *self.get_cypress_test_commands(repo_dir=repo_dir),
+            *self.get_cypress_test_commands(),
         ]
         return commands
 
@@ -232,17 +228,14 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
             data_point: The data point to execute tests for
             predicted_patch: The predicted patch to apply to the repository
         """
-        repo_dir = os.path.join(self.working_dir.name, "repo")
-
         commands_before_health_check = [
-            f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
-            f"cd {repo_dir} && git checkout {data_point.base_commit}",
+            f"git clone https://github.com/{data_point.repo}.git {self.repo_dir}",
+            f"cd {self.repo_dir} && git checkout {data_point.base_commit}",
             *self.get_patch_commands(
                 patch=data_point.patch if predicted_patch is None else predicted_patch,
-                repo_dir=repo_dir,
             ),
-            f"cd {repo_dir} && git diff",
-            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+            f"cd {self.repo_dir} && git diff",
+            f"cd {self.repo_dir} && docker compose --file docker-compose-development.yml up -d",
         ]
 
         for cmd in commands_before_health_check:
@@ -252,6 +245,8 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         env = self.environment.copy() if self.environment else {}
         env["CYPRESS_BASEURL"] = "http://localhost:8080"
 
-        commands_after_health_check = self.get_cypress_test_commands(repo_dir=repo_dir)
+        commands_after_health_check = self.get_cypress_test_commands(
+            repo_dir=self.repo_dir
+        )
         for cmd in commands_after_health_check:
             subprocess.run(cmd, shell=True, check=True, env=self.environment)
