@@ -11,6 +11,8 @@ cd hecm
 uv pip install -e .
 ```
 
+If you want to use a sandboxed environment, you need to install [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install). Also, make sure that the docker daemon is running and you have the necessary permissions to run docker commands. Note that for certain local executors like `JuspayHyperswitchLocalTestExecutor` as well, you need to have docker and docker compose installed.
+
 ## Usage
 
 ### Generating Coding Agent Data for a given repository
@@ -53,17 +55,50 @@ data_points.export_to_huggingface(
 
 ### Evaluating Coding Agent Data for a given repository
 
+#### Running in a sandboxed environment
+
 ```python
-import rich
+import weave
 from datasets import load_dataset
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
-from hecm.eval_harness.test_execution import JuspayHyperswitchTestExecutor
+from hecm.eval_harness.test_execution import JuspayHyperswitchSandboxedTestExecutor
 
-dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-data_point = CodingAgentDataPoint.model_validate(dataset[0])
-executor = JuspayHyperswitchTestExecutor()
-results = executor.execute(data_point)
-rich.print(results)
-executor.cleanup()
+
+@weave.op
+def test_cypress_execution():
+    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+    data_point = CodingAgentDataPoint.model_validate(dataset[0])
+    executor = JuspayHyperswitchSandboxedTestExecutor(show_output_logs=True)
+    results = executor.execute(data_point)
+    executor.cleanup()
+    return results
+
+
+weave.init(project_name="hyperswitch")
+test_cypress_execution()
+```
+
+#### Running in a local environment
+
+```python
+import weave
+from datasets import load_dataset
+
+from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
+
+
+@weave.op
+def test_cypress_execution():
+    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+    data_point = CodingAgentDataPoint.model_validate(dataset[0])
+    executor = JuspayHyperswitchLocalTestExecutor(show_output_logs=True)
+    results = executor.execute(data_point)
+    executor.cleanup()
+    return results
+
+
+weave.init(project_name="hyperswitch")
+test_cypress_execution()
 ```
