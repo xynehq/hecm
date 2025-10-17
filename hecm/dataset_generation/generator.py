@@ -15,6 +15,7 @@ from hecm.dataset_generation.schemas import (
     PRComment,
 )
 from hecm.utils.gh_utils import keep_only_dir_from_diff, remove_dir_from_diff
+from hecm.utils.md_utils import extract_markdown_section
 
 
 class CodingAgentDataGenerator:
@@ -27,6 +28,8 @@ class CodingAgentDataGenerator:
         test_dirs: List[str] = [],
         issues_page_counter: int = 1,
         register_commit_messages: bool = False,
+        register_comments_as_hints: bool = False,
+        testing_instructions_subheading: str = "",
     ):
         self.repo_owner = repo_owner
         self.repo_name = repo_name
@@ -41,6 +44,8 @@ class CodingAgentDataGenerator:
             self.headers["Authorization"] = f"token {github_token}"
         self.issues_page_counter = issues_page_counter
         self.register_commit_messages = register_commit_messages
+        self.register_comments_as_hints = register_comments_as_hints
+        self.testing_instructions_subheading = testing_instructions_subheading
 
     def get_linked_prs(self, url: str) -> Union[List[int], None]:
         response = requests.get(url)
@@ -186,12 +191,16 @@ class CodingAgentDataGenerator:
                     patch=gold_patch,
                     test_patch=test_patch,
                     created_at=issue.linked_pr.created_at,
-                    hints_text=issue.linked_pr.get_hints_text(),
+                    hints_text=issue.linked_pr.get_hints_text(
+                        get_comments=self.register_comments_as_hints
+                    ),
+                    test_instructions=extract_markdown_section(
+                        issue.linked_pr.body, self.testing_instructions_subheading
+                    ),
                     # version=get_last_release_before_pr_merge(
                     #     self.repo_owner, self.repo_name, issue.linked_pr.number
                     # )["tag_name"],
                     base_commit=issue.linked_pr.base_commit,
-                    # environment_setup_commit=issue.linked_pr.base_commit,
                 )
             except ValueError:
                 return None
