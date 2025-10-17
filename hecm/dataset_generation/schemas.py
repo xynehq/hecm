@@ -18,13 +18,14 @@ class LinkedPR(BaseModel):
     created_at: str
     comments: List[PRComment] = []
 
-    def get_hints_text(self) -> str:
+    def get_hints_text(self, get_comments: bool = True) -> str:
         hints_text = self.body if self.body else ""
-        for comment in self.comments:
-            hints_text = (
-                hints_text + f"\n\n{comment.diff_hunk}" if comment.diff_hunk else ""
-            )
-            hints_text += f"\n\n{comment.comment_body}\n\n" + "-" * 100
+        if get_comments:
+            for comment in self.comments:
+                hints_text = (
+                    hints_text + f"\n\n{comment.diff_hunk}" if comment.diff_hunk else ""
+                )
+                hints_text += f"\n\n{comment.comment_body}\n\n" + "-" * 100
         return hints_text
 
 
@@ -45,9 +46,9 @@ class CodingAgentDataPoint(BaseModel):
     test_patch: str
     created_at: str
     hints_text: str
+    test_instructions: str
     # version: str
     base_commit: str
-    # environment_setup_commit: str
     script_to_run_tests: str = "unknown"
 
 
@@ -69,7 +70,7 @@ class CodingAgentDataset(BaseModel):
             content += f"{data_point.hints_text}, "
             # content += f"{data_point.version}, "
             content += f"{data_point.base_commit}, "
-            # content += f"{data_point.environment_setup_commit}\n"
+            content += f"{data_point.test_instructions}, "
             content += f"{data_point.script_to_run_tests}\n"
         with open(filename, "w") as f:
             f.write(content)
