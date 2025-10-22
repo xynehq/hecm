@@ -6,11 +6,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "bs4>=0.0.2",
+    "cursor-agent-tools>=0.1.39",
     "datasets>=4.1.1",
     "docker>=7.1.0",
     "dspy>=3.0.3",
     "gitpython>=3.1.45",
-    "mini-swe-agent>=1.14.2",
+    "httpx>=0.28.1",
     "msgpack>=1.1.1",
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
