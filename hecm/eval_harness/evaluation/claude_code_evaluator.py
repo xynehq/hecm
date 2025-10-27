@@ -557,6 +557,7 @@ def main():
 
     # Create a fake minimal CodingAgentDataPoint for testing
     dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+    print(dataset[0])
     data_point = CodingAgentDataPoint.model_validate(dataset[0])
     # data_point = CodingAgentDataPoint(
     #     instance_id="test_001",
