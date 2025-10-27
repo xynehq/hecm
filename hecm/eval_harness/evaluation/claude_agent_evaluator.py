@@ -9,7 +9,7 @@ from hecm.dataset_generation.schemas import CodingAgentDataPoint
 from hecm.eval_harness.evaluation.base import BaseEvaluator
 
 
-class ClauseAgentEvaluator(BaseEvaluator):
+class ClaudeAgentEvaluator(BaseEvaluator):
     async def execute_claude_agent(
         self, data_point: CodingAgentDataPoint, repo_dir: str
     ) -> list:
