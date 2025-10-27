@@ -1,0 +1,80 @@
+{
+  "data_points": [
+    {
+      "instance_id": "juspay__hyperswitch-9755",
+      "repo": "juspay/hyperswitch",
+      "problem_statement": "Bug: [BUG] Migration runner fails due to Just already present\n\n\n\n### Description:\n\nIn `docker-compose.yml`, the `migration-runner` service fails if we run `docker compose up` more than once, because, the `just` installer doesn't handle the case where just is already installed.\n\n### Solution:\n\nAdd a conditional check to run `just` installer only if `just` is not present already.",
+      "base_commit": "b52aafa8873fc4704bd69014cc457daf32d5523c",
+      "gold_patch": "diff --git a/docker-compose.yml b/docker-compose.yml\nindex e16dd74466b..4e2600c8344 100644\n--- a/docker-compose.yml\n+++ b/docker-compose.yml\n@@ -63,7 +63,9 @@ services:\n       bash -c \"\n       apt-get update && apt-get install -y curl xz-utils &&\n       curl --proto '=https' --tlsv1.2 -LsSf https://github.com/diesel-rs/diesel/releases/latest/download/diesel_cli-installer.sh | bash &&\n-      curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin &&\n+      if ! command -v just >/dev/null 2>&1; then\n+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin\n+      fi &&\n       export PATH=\"$${PATH}:$${HOME}/.cargo/bin\" &&\n       just migrate\"\n     working_dir: /app\n",
+      "gold_test_patch": "",
+      "hints_text": "## Type of Change\r\n<!-- Put an `x` in the boxes that apply -->\r\n\r\n- [x] Bugfix\r\n- [ ] New feature\r\n- [ ] Enhancement\r\n- [ ] Refactoring\r\n- [ ] Dependency updates\r\n- [ ] Documentation\r\n- [ ] CI/CD\r\n\r\n## Description\r\n<!-- Describe your changes in detail -->\r\nThe migration-runner service in the `docker-compose.yml` file fails during a second deployment as `just` installer raises `just already installed` error. This PR fixes that issue issue by adding a conditional statement which calls the just installer only when just command is not available.\r\n\r\n### Additional Changes\r\n\r\n- [ ] This PR modifies the API contract\r\n- [ ] This PR modifies the database schema\r\n- [ ] This PR modifies application configuration/environment variables\r\n\r\n<!--\r\nProvide links to the files with corresponding changes.\r\n\r\nFollowing are the paths where you can find config files:\r\n1. `config`\r\n2. `crates/router/src/configs`\r\n3. `loadtest/config`\r\n-->\r\n\r\n\r\n## Motivation and Context\r\n<!--\r\nWhy is this change required? What problem does it solve?\r\nIf it fixes an open issue, please link to the issue here.\r\n\r\nIf you don't have an issue, we'd recommend starting with one first so the PR\r\ncan focus on the implementation (unless it is an obvious bug or documentation fix\r\nthat will have little conversation).\r\n-->\r\nN/A\r\n\r\n## How did you test it?\r\n<!--\r\nDid you write an integration/unit/API test to verify the code changes?\r\nOr did you test this change manually (provide relevant screenshots)?\r\n-->\r\nRan `docker compose up -d` twice.\r\n<img width=\"476\" height=\"491\" alt=\"Screenshot 2025-10-08 at 3 44 53\u202fPM\" src=\"https://github.com/user-attachments/assets/c9de99cd-ac3a-4ab9-8c4e-5a1bb8d48d84\" />\r\n\r\n\r\n## Checklist\r\n<!-- Put an `x` in the boxes that apply -->\r\n\r\n- [x] I formatted the code `cargo +nightly fmt --all`\r\n- [x] I addressed lints thrown by `cargo clippy`\r\n- [x] I reviewed the submitted code\r\n- [ ] I added unit tests for my changes where possible\r\n",
+      "test_instructions": "\r\nRan `docker compose up -d` twice.\r\n<img width=\"476\" height=\"491\" alt=\"Screenshot 2025-10-08 at 3 44 53\u202fPM\" src=\"https://github.com/user-attachments/assets/c9de99cd-ac3a-4ab9-8c4e-5a1bb8d48d84\" />\r",
+      "claude_patch": "diff --git a/docker-compose.yml b/docker-compose.yml\nindex e16dd7446..5ccdaef25 100644\n--- a/docker-compose.yml\n+++ b/docker-compose.yml\n@@ -63,7 +63,9 @@ services:\n       bash -c \"\n       apt-get update && apt-get install -y curl xz-utils &&\n       curl --proto '=https' --tlsv1.2 -LsSf https://github.com/diesel-rs/diesel/releases/latest/download/diesel_cli-installer.sh | bash &&\n-      curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin &&\n+      if ! command -v just &> /dev/null; then\n+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin\n+      fi &&\n       export PATH=\"$${PATH}:$${HOME}/.cargo/bin\" &&\n       just migrate\"\n     working_dir: /app\n",
+      "claude_success": true,
+      "claude_stdout": "I've successfully fixed the bug in the docker-compose.yml file. The issue was that the migration-runner service was trying to install `just` every time it ran, even when it was already installed, causing failures on subsequent runs of `docker compose up`.\n\n## What I Fixed\n\nI modified the `migration_runner` service in `docker-compose.yml` to add a conditional check before installing `just`:\n\n**Before:**\n```bash\ncurl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin &&\n```\n\n**After:**\n```bash\nif ! command -v just &> /dev/null; then\n  curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin\nfi &&\n```\n\nThis change ensures that `just` is only installed when it's not already present on the system, preventing the failure that occurred on subsequent docker compose up executions.\n\nThe fix is minimal, targeted, and preserves all existing functionality while resolving the specific issue described in the bug report.\n",
+      "claude_stderr": "",
+      "claude_execution_time": 21.1004,
+      "claude_files_changed": [
+        "docker-compose.yml"
+      ],
+      "created_at": "2025-10-27T14:57:44.553565",
+      "model_config": {
+        "openai_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "big_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "small_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "middle_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+      },
+      "error": null,
+      "claude_log_file": "logs/claude_juspay__hyperswitch-9755_20251027_145749.log"
+    },
+    {
+      "instance_id": "juspay__hyperswitch-9715",
+      "repo": "juspay/hyperswitch",
+      "problem_statement": "Bug: Create indexes for tracker tables in v2_compatible_migrations\n\n\n\n",
+      "base_commit": "cc4eaed5702dbcaa6c54a32714b52f479dfbe85b",
+      "gold_patch": "diff --git a/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/down.sql b/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/down.sql\nnew file mode 100644\nindex 00000000000..fb18e635e20\n--- /dev/null\n+++ b/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/down.sql\n@@ -0,0 +1,22 @@\n+-- Drop unique indexes on id columns\n+-- This will remove the unique indexes created for id column performance optimization and data integrity\n+\n+-- tracker tables\n+DROP INDEX IF EXISTS customers_id_index;\n+\n+DROP INDEX IF EXISTS payment_intent_id_index;\n+\n+DROP INDEX IF EXISTS payment_attempt_id_index;\n+\n+DROP INDEX IF EXISTS payment_methods_id_index;\n+\n+DROP INDEX IF EXISTS refund_id_index;\n+\n+-- Accounts tables\n+DROP INDEX IF EXISTS business_profile_id_index;\n+\n+DROP INDEX IF EXISTS merchant_account_id_index;\n+\n+DROP INDEX IF EXISTS merchant_connector_account_id_index;\n+\n+DROP INDEX IF EXISTS organization_id_index;\ndiff --git a/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/up.sql b/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/up.sql\nnew file mode 100644\nindex 00000000000..a8e27af1485\n--- /dev/null\n+++ b/v2_compatible_migrations/2025-10-07-131000_add_indexes_on_id_columns/up.sql\n@@ -0,0 +1,21 @@\n+-- Create unique indexes on id columns for better query performance and data integrity\n+\n+-- Tracker Tables\n+CREATE UNIQUE INDEX IF NOT EXISTS customers_id_index ON customers (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS payment_intent_id_index ON payment_intent (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS payment_attempt_id_index ON payment_attempt (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS payment_methods_id_index ON payment_methods (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS refund_id_index ON refund (id);\n+\n+-- Accounts Tables\n+CREATE UNIQUE INDEX IF NOT EXISTS business_profile_id_index ON business_profile (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS merchant_account_id_index ON merchant_account (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS merchant_connector_account_id_index ON merchant_connector_account (id);\n+\n+CREATE UNIQUE INDEX IF NOT EXISTS organization_id_index ON organization (id);\n",
+      "gold_test_patch": "",
+      "hints_text": "## Type of Change\r\n<!-- Put an `x` in the boxes that apply -->\r\n\r\n- [ ] Bugfix\r\n- [ ] New feature\r\n- [x] Enhancement\r\n- [ ] Refactoring\r\n- [ ] Dependency updates\r\n- [ ] Documentation\r\n- [ ] CI/CD\r\n\r\n## Description\r\n<!-- Describe your changes in detail -->\r\nSince `id` column is introduced as varchar for a few major tracker tables in v2, index creation was missed in v2_compatible_migrations directory. This PR includes that.\r\n\r\n\r\n### Additional Changes\r\n\r\n- [ ] This PR modifies the API contract\r\n- [ ] This PR modifies the database schema\r\n- [ ] This PR modifies application configuration/environment variables\r\n\r\n<!--\r\nProvide links to the files with corresponding changes.\r\n\r\nFollowing are the paths where you can find config files:\r\n1. `config`\r\n2. `crates/router/src/configs`\r\n3. `loadtest/config`\r\n-->\r\n\r\n\r\n## Motivation and Context\r\n<!--\r\nWhy is this change required? What problem does it solve?\r\nIf it fixes an open issue, please link to the issue here.\r\n\r\nIf you don't have an issue, we'd recommend starting with one first so the PR\r\ncan focus on the implementation (unless it is an obvious bug or documentation fix\r\nthat will have little conversation).\r\n-->\r\n\r\nTo improve DB query time.\r\n\r\n\r\n## How did you test it?\r\n<!--\r\nDid you write an integration/unit/API test to verify the code changes?\r\nOr did you test this change manually (provide relevant screenshots)?\r\n-->\r\nRan diesel migrations\r\n\r\n\r\n## Checklist\r\n<!-- Put an `x` in the boxes that apply -->\r\n\r\n- [x] I formatted the code `cargo +nightly fmt --all`\r\n- [x] I addressed lints thrown by `cargo clippy`\r\n- [x] I reviewed the submitted code\r\n- [ ] I added unit tests for my changes where possible\r\n",
+      "test_instructions": "\r\nRan diesel migrations\r",
+      "claude_patch": "",
+      "claude_success": false,
+      "claude_stdout": "I'll help you create indexes for tracker tables in the v2_compatible_migrations. Let me first explore the codebase to understand the structure and find the relevant files.\n\n<function=Task>\n<parameter=description>\nExplore codebase for tracker tables and v2_compatible_migrations\n</parameter>\n<parameter=prompt>\nExplore the codebase to find tracker tables and v2_compatible_migrations files to understand where indexes need to be created.\n</parameter>\n<parameter=subagent_type>\nExplore\n</parameter>\n</function>\n</tool_call>\n",
+      "claude_stderr": "",
+      "claude_execution_time": 7.372135,
+      "claude_files_changed": [],
+      "created_at": "2025-10-27T14:58:06.154648",
+      "model_config": {
+        "openai_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "big_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "small_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "middle_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+      },
+      "error": "",
+      "claude_log_file": "logs/claude_juspay__hyperswitch-9715_20251027_145810.log"
+    }
+  ],
+  "metadata": {
+    "name": "hyperswitch_claude_attempts",
+    "source_dataset": "juspay/hyperswitch",
+    "source_split": "train",
+    "model_config": {
+      "openai_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "big_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "small_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "middle_model": "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+    },
+    "num_samples": 2,
+    "num_successful": 1,
+    "num_failed": 1,
+    "created_at": "2025-10-27T14:58:13.997227",
+    "proxy_config": {
+      "anthropic_base_url": "http://localhost:8082",
+      "openai_base_url": "http://127.0.0.1:8005/v1"
+    },
+    "temp_directories": {
+      "proxy_repo": "/tmp/claude-code-proxy",
+      "repos_cache": "/tmp/claude_repos_cache",
+      "log_dir": "logs"
+    }
+  }
+}
