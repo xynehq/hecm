@@ -3,9 +3,10 @@ name = "hecm"
 dynamic = ["version"]
 description = "Epub reader for the 21st century"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "bs4>=0.0.2",
+    "claude-agent-sdk>=0.1.5",
     "cursor-agent-tools>=0.1.39",
     "datasets>=4.1.1",
     "docker>=7.1.0",
@@ -16,6 +17,7 @@ dependencies = [
     "openai>=2.0.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.0",
+    "terminal-bench>=0.2.18",
     "tqdm>=4.67.1",
     "weave>=0.52.9",
 ]
