@@ -1,3 +1,3 @@
-from hecm.eval_harness.evaluation.clause_agent_evaluator import ClauseAgentEvaluator
+from hecm.eval_harness.evaluation.claude_agent_evaluator import ClaudeAgentEvaluator
 
-__all__ = ["ClauseAgentEvaluator"]
+__all__ = ["ClaudeAgentEvaluator"]
