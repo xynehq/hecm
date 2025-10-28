@@ -7,6 +7,8 @@ repos_cache/
 # C extensions
 *.so
 alo.py
+logs/
+sachin-xyne.ovpn
 # Distribution / packaging
 .Python
 build/
