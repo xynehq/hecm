@@ -1,12 +1,12 @@
-import os
-import subprocess
-import time
-import shutil
-import tempfile
 import logging
+import os
+import shutil
+import subprocess
+import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import weave
 from datasets import load_dataset
@@ -19,10 +19,6 @@ from hecm.eval_harness.test_execution.base import (
     BaseSandboxedExecutor,
 )
 
-
-# -------------------------------
-# Logging helper (keeps behaviour from original)
-# -------------------------------
 
 def setup_logging(log_dir: Path, debug: bool = False):
     """Setup logging configuration."""
@@ -48,7 +44,9 @@ def setup_logging(log_dir: Path, debug: bool = False):
     console_handler.setLevel(logging.INFO)
 
     # Formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
 
@@ -97,8 +95,10 @@ class ClaudeProxyEvaluator(BaseEvaluator):
             # one, pass a simple object that has the attributes used in tests.
             class _DummyExecutor:
                 show_output_logs = False
+
                 def execute(self, dp):
                     return {}
+
                 def cleanup(self):
                     return None
 
@@ -166,16 +166,18 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
     def _get_proxy_env(self) -> Dict[str, str]:
         env = os.environ.copy()
-        env.update({
-            "ANTHROPIC_BASE_URL": self.anthropic_base_url,
-            "ANTHROPIC_API_KEY": self.anthropic_api_key,
-            "OPENAI_BASE_URL": self.openai_base_url,
-            "OPENAI_API_KEY": self.openai_api_key,
-            "OPENAI_MODEL": self.openai_model,
-            "BIG_MODEL": self.big_model,
-            "SMALL_MODEL": self.small_model,
-            "MIDDLE_MODEL": self.middle_model,
-        })
+        env.update(
+            {
+                "ANTHROPIC_BASE_URL": self.anthropic_base_url,
+                "ANTHROPIC_API_KEY": self.anthropic_api_key,
+                "OPENAI_BASE_URL": self.openai_base_url,
+                "OPENAI_API_KEY": self.openai_api_key,
+                "OPENAI_MODEL": self.openai_model,
+                "BIG_MODEL": self.big_model,
+                "SMALL_MODEL": self.small_model,
+                "MIDDLE_MODEL": self.middle_model,
+            }
+        )
         return env
 
     def start_proxy(self):
@@ -189,8 +191,8 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         env = self._get_proxy_env()
 
         # Open log files
-        self.proxy_stdout_file = open(self.proxy_stdout_log, 'w')
-        self.proxy_stderr_file = open(self.proxy_stderr_log, 'w')
+        self.proxy_stdout_file = open(self.proxy_stdout_log, "w")
+        self.proxy_stderr_file = open(self.proxy_stderr_log, "w")
 
         try:
             self.proxy_process = subprocess.Popen(
@@ -209,7 +211,9 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                 self.logger.error(f"Check logs: {self.proxy_stderr_log}")
                 raise RuntimeError("Proxy failed to start")
 
-            self.logger.info(f"Proxy started successfully (PID: {self.proxy_process.pid})")
+            self.logger.info(
+                f"Proxy started successfully (PID: {self.proxy_process.pid})"
+            )
         except Exception as e:
             self.logger.error(f"Failed to start proxy: {e}")
             if self.proxy_stdout_file:
@@ -243,7 +247,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
     # Repo helpers (clone/update and prepare test repo)
     # -------------------------------
     def _get_cached_repo_path(self, repo: str) -> Path:
-        safe_name = repo.replace('/', '_').replace('\\', '_')
+        safe_name = repo.replace("/", "_").replace("\\", "_")
         return self.repos_cache_dir / safe_name
 
     def _clone_or_update_repo(self, repo: str) -> Path:
@@ -282,7 +286,9 @@ class ClaudeProxyEvaluator(BaseEvaluator):
     def _setup_test_repo(self, data_point: CodingAgentDataPoint) -> Path:
         self.logger.debug(f"Setting up test repo for {data_point.instance_id}")
         cached_repo = self._clone_or_update_repo(data_point.repo)
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"claude_test_{data_point.instance_id}_"))
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix=f"claude_test_{data_point.instance_id}_")
+        )
         self.logger.debug(f"Created temp dir: {temp_dir}")
 
         shutil.copytree(cached_repo, temp_dir, dirs_exist_ok=True)
@@ -296,8 +302,18 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                 capture_output=True,
                 timeout=30,
             )
-            subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=str(temp_dir), check=True, capture_output=True)
-            subprocess.run(["git", "clean", "-fdx"], cwd=str(temp_dir), check=True, capture_output=True)
+            subprocess.run(
+                ["git", "reset", "--hard", "HEAD"],
+                cwd=str(temp_dir),
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "clean", "-fdx"],
+                cwd=str(temp_dir),
+                check=True,
+                capture_output=True,
+            )
             self.logger.debug("Successfully set up test repo")
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to checkout {data_point.base_commit}: {e}")
@@ -308,20 +324,25 @@ class ClaudeProxyEvaluator(BaseEvaluator):
     # -------------------------------
     # Running Claude CLI (keeps original cli invocation)
     # -------------------------------
-    def _run_claude_command(self, prompt: str, working_dir: Path, instance_id: str, timeout: int = 300):
+    def _run_claude_command(
+        self, prompt: str, working_dir: Path, instance_id: str, timeout: int = 300
+    ):
         env = self._get_proxy_env()
-        claude_log_file = self.log_dir / f"claude_{instance_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        claude_log_file = (
+            self.log_dir
+            / f"claude_{instance_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
 
         self.logger.debug(f"Running claude for {instance_id}")
         self.logger.debug(f"Claude log file: {claude_log_file}")
 
         try:
-            with open(claude_log_file, 'w') as log_f:
-                log_f.write("="*80 + "\n")
+            with open(claude_log_file, "w") as log_f:
+                log_f.write("=" * 80 + "\n")
                 log_f.write("PROMPT:\n")
-                log_f.write("="*80 + "\n")
+                log_f.write("=" * 80 + "\n")
                 log_f.write(prompt + "\n")
-                log_f.write("="*80 + "\n\n")
+                log_f.write("=" * 80 + "\n\n")
                 log_f.flush()
                 prompt = f"### Plase change the files as instructed in the prompt. \n{prompt}"
 
@@ -335,18 +356,20 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                 )
 
                 log_f.write("STDOUT:\n")
-                log_f.write("="*80 + "\n")
+                log_f.write("=" * 80 + "\n")
                 log_f.write(result.stdout + "\n")
-                log_f.write("="*80 + "\n\n")
+                log_f.write("=" * 80 + "\n\n")
 
                 log_f.write("STDERR:\n")
-                log_f.write("="*80 + "\n")
+                log_f.write("=" * 80 + "\n")
                 log_f.write(result.stderr + "\n")
-                log_f.write("="*80 + "\n\n")
+                log_f.write("=" * 80 + "\n\n")
 
                 log_f.write(f"EXIT CODE: {result.returncode}\n")
 
-            self.logger.debug(f"Claude finished for {instance_id} with exit code {result.returncode}")
+            self.logger.debug(
+                f"Claude finished for {instance_id} with exit code {result.returncode}"
+            )
             return result.stdout, result.stderr, result.returncode, str(claude_log_file)
 
         except subprocess.TimeoutExpired:
@@ -361,20 +384,36 @@ class ClaudeProxyEvaluator(BaseEvaluator):
     # -------------------------------
     def _get_git_diff(self, repo_path: Path) -> str:
         try:
-            result = subprocess.run(["git", "diff", "HEAD"], cwd=str(repo_path), capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             diff = result.stdout
 
-            result_untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=str(repo_path), capture_output=True, text=True, check=True)
-            untracked_files = result_untracked.stdout.strip().split('\n') if result_untracked.stdout.strip() else []
+            result_untracked = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            untracked_files = (
+                result_untracked.stdout.strip().split("\n")
+                if result_untracked.stdout.strip()
+                else []
+            )
             if untracked_files:
                 for file in untracked_files:
                     if not file:
                         continue
                     diff += f"\n\n--- /dev/null\n+++ b/{file}\n"
                     try:
-                        with open(repo_path / file, 'r') as f:
+                        with open(repo_path / file, "r") as f:
                             content = f.read()
-                            for line in content.split('\n'):
+                            for line in content.split("\n"):
                                 diff += f"+{line}\n"
                     except Exception:
                         pass
@@ -386,11 +425,27 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
     def _get_changed_files(self, repo_path: Path) -> List[str]:
         try:
-            result = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=str(repo_path), capture_output=True, text=True, check=True)
-            changed = result.stdout.strip().split('\n') if result.stdout.strip() else []
+            result = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            changed = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-            result_untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=str(repo_path), capture_output=True, text=True, check=True)
-            untracked = result_untracked.stdout.strip().split('\n') if result_untracked.stdout.strip() else []
+            result_untracked = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            untracked = (
+                result_untracked.stdout.strip().split("\n")
+                if result_untracked.stdout.strip()
+                else []
+            )
 
             all_files = [f for f in changed + untracked if f]
             return all_files
@@ -444,7 +499,9 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
-            self.logger.error(f"Error processing {data_point.instance_id}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error processing {data_point.instance_id}: {e}", exc_info=True
+            )
             return {
                 "instance_id": data_point.instance_id,
                 "repo": data_point.repo,
@@ -467,9 +524,18 @@ class ClaudeProxyEvaluator(BaseEvaluator):
     # Convenience: evaluate wrapper re-using BaseEvaluator.evaluate signature
     # -------------------------------
     @weave.op
-    def evaluate_dataset(self, dataset: str | object, max_data_points: Optional[int] = None, start_proxy: bool = True):
+    def evaluate_dataset(
+        self,
+        dataset: str | object,
+        max_data_points: Optional[int] = None,
+        start_proxy: bool = True,
+    ):
         # load dataset if string
-        ds = load_dataset(dataset, split="train") if isinstance(dataset, str) else dataset
+        ds = (
+            load_dataset(dataset, split="train")
+            if isinstance(dataset, str)
+            else dataset
+        )
         if max_data_points is not None:
             ds = ds.select(range(min(max_data_points, len(ds))))
 
@@ -493,96 +559,3 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                 self.stop_proxy()
 
         return results
-
-
-
-
-import os
-from typing import List, Dict, Any
-from hecm.eval_harness.test_execution.base import BaseLocalExecutor
-from hecm.dataset_generation.schemas import CodingAgentDataPoint
-
-# from claude_proxy_evaluator import ClaudeProxyEvaluator
-
-
-class MinimalLocalExecutor(BaseLocalExecutor):
-    """A minimal concrete implementation of BaseLocalExecutor for testing.
-
-    It implements the abstract get_commands method and provides a simple
-    execute/cleanup behavior so you can run the evaluator locally without
-    depending on your full execution harness.
-    """
-
-    def get_commands(self, data_point: CodingAgentDataPoint) -> List[str]:
-        # Return an empty list of commands — the evaluator itself runs the
-        # claude flow and git interactions. Implement this to match your
-        # real executor's contract when integrating.
-        return []
-
-    def execute(self, data_point: CodingAgentDataPoint) -> Dict[str, Any]:
-        # Simple placeholder execution result
-        return {"status": "skipped", "instance_id": data_point.instance_id}
-
-    def cleanup(self) -> None:
-        # No-op for the minimal executor
-        return None
-
-
-
-
-
-def main():
-    import datasets
-    import os
-    from hecm.eval_harness.test_execution.base import BaseLocalExecutor
-    from hecm.dataset_generation.schemas import CodingAgentDataPoint
-    """Simple test entrypoint for ClaudeProxyEvaluator."""
-    # Initialize a local executor (or use your sandboxed one)
-    executor = MinimalLocalExecutor()
-
-    # Instantiate evaluator
-    evaluator = ClaudeProxyEvaluator(
-        executor=executor,
-        anthropic_base_url="http://localhost:8082",
-        anthropic_api_key="dummy",
-        openai_base_url="http://127.0.0.1:8005/v1",
-        openai_api_key="dummy",
-        openai_model="Qwen/Qwen3-Coder-30B-A3B-Instruct",
-        log_dir="./logs",
-        debug=True,
-    )
-
-    # Start proxy manually (optional)
-    evaluator.start_proxy()
-
-    # Create a fake minimal CodingAgentDataPoint for testing
-    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-    print(dataset[0])
-    data_point = CodingAgentDataPoint.model_validate(dataset[0])
-    # data_point = CodingAgentDataPoint(
-    #     instance_id="test_001",
-    #     repo="fuergaosi233/claude-code-proxy",
-    #     problem_statement="Fix a typo in the README file.",
-    #     base_commit="main",
-    #     patch="",
-    #     test_patch="",
-    #     hints_text="",
-    #     test_instructions="",
-    # )
-
-    # Run one test sample
-    result = evaluator.get_agent_response(data_point)
-
-    print("\n===== ClaudeProxyEvaluator Test Result =====")
-    for key, value in result.items():
-        if isinstance(value, str) and len(value) > 300:
-            print(f"{key}: {value[:300]}... [truncated]")
-        else:
-            print(f"{key}: {value}")
-
-    # Stop proxy after test
-    evaluator.stop_proxy()
-
-
-if __name__ == "__main__":
-    main()
