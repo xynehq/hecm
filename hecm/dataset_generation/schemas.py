@@ -46,7 +46,7 @@ class CodingAgentDataPoint(BaseModel):
     test_patch: str
     created_at: str
     hints_text: str
-    test_instructions: str
+    test_instructions: Optional[str] = None
     # version: str
     base_commit: str
     script_to_run_tests: str = "unknown"

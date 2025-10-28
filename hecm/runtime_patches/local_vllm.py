@@ -103,7 +103,9 @@ class LocalVLLMAgent(BaseAgent):
 
                     if status >= 500:
                         # server error; retry
-                        logger.warning(f"LocalVLLM server error {status}, attempt {attempt}/{self.max_retries}")
+                        logger.warning(
+                            f"LocalVLLM server error {status}, attempt {attempt}/{self.max_retries}"
+                        )
                         await asyncio.sleep(self.backoff_factor * attempt)
                         continue
 
@@ -120,7 +122,12 @@ class LocalVLLMAgent(BaseAgent):
                     # success
                     j = resp.json()
                     assistant_msg = self._extract_assistant_text(j)
-                    return {"message": assistant_msg, "raw": j, "tool_calls": [], "thinking": None}
+                    return {
+                        "message": assistant_msg,
+                        "raw": j,
+                        "tool_calls": [],
+                        "thinking": None,
+                    }
 
             except Exception as exc:
                 last_exc = exc
@@ -129,7 +136,9 @@ class LocalVLLMAgent(BaseAgent):
                 continue
 
         # exhausted retries
-        logger.error(f"LocalVLLM request failed after {self.max_retries} attempts: {last_exc}")
+        logger.error(
+            f"LocalVLLM request failed after {self.max_retries} attempts: {last_exc}"
+        )
         return {
             "message": f"Error: local vLLM request failed after {self.max_retries} attempts: {last_exc}",
             "tool_calls": [],
@@ -149,7 +158,9 @@ class LocalVLLMAgent(BaseAgent):
             # Running inside an event loop — run in a new task and wait
             return asyncio.run(self.chat(prompt, **kwargs))
         else:
-            return asyncio.get_event_loop().run_until_complete(self.chat(prompt, **kwargs))
+            return asyncio.get_event_loop().run_until_complete(
+                self.chat(prompt, **kwargs)
+            )
 
     # ----------------------
     # Helper: extract assistant text from various shapes
@@ -174,7 +185,9 @@ class LocalVLLMAgent(BaseAgent):
                     if isinstance(msg, dict) and "content" in msg:
                         # content can be string or dict
                         content = msg.get("content")
-                        return content if isinstance(content, str) else json.dumps(content)
+                        return (
+                            content if isinstance(content, str) else json.dumps(content)
+                        )
                     # legacy text shape
                     if "text" in first:
                         return first["text"]
@@ -219,29 +232,41 @@ class LocalVLLMAgent(BaseAgent):
     # ----------------------
     # Minimal BaseAgent abstract methods (safe stubs)
     # ----------------------
-    async def _execute_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _execute_tool_calls(
+        self, tool_calls: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         For tests, we just return an empty list. Implement real tool execution if required.
         """
-        logger.debug("LocalVLLMAgent._execute_tool_calls called; returning empty results")
+        logger.debug(
+            "LocalVLLMAgent._execute_tool_calls called; returning empty results"
+        )
         return []
 
     def _generate_system_prompt(self, *args, **kwargs) -> str:
         """Return a simple system prompt compatible with pipelines that call it."""
         return "You are a local vLLM used for testing. Keep responses concise."
 
-    def _prepare_tools(self, tool_configs: Optional[List[Dict[str, Any]]] = None) -> None:
+    def _prepare_tools(
+        self, tool_configs: Optional[List[Dict[str, Any]]] = None
+    ) -> None:
         """No tools prepared by default; keep a copy if provided."""
         self._tools = [] if tool_configs is None else list(tool_configs or [])
 
     def get_structured_output(self, raw_output: Dict[str, Any]) -> Dict[str, Any]:
         """Map raw output to a small structured dict expected by some code paths."""
-        text = raw_output.get("message") if isinstance(raw_output, dict) else str(raw_output)
+        text = (
+            raw_output.get("message")
+            if isinstance(raw_output, dict)
+            else str(raw_output)
+        )
         return {"text": text, "raw": raw_output}
 
     async def query_image(self, image_bytes: bytes, **kwargs) -> Dict[str, Any]:
         """Image queries are not supported in this minimal runtime patch."""
-        return {"error": "LocalVLLMAgent: query_image not implemented in runtime patch."}
+        return {
+            "error": "LocalVLLMAgent: query_image not implemented in runtime patch."
+        }
 
     def close(self) -> None:
         """No persistent connections to close in this minimal agent."""
@@ -252,6 +277,7 @@ class LocalVLLMAgent(BaseAgent):
 # Factory patching
 # ----------------------
 # Replace the patched_create_agent function in hecm/runtime_patches/local_vllm.py with this:
+
 
 def patched_create_agent(*args, **kwargs):
     """
@@ -264,7 +290,11 @@ def patched_create_agent(*args, **kwargs):
         logger.info(f"[patched factory] Using LocalVLLMAgent for model: {model}")
 
         # Compute base_url first (pop to avoid duplicates)
-        base_url = kwargs.pop("base_url", None) or kwargs.pop("host", None) or os.getenv("LOCAL_VLLM_URL", LOCAL_VLLM_URL)
+        base_url = (
+            kwargs.pop("base_url", None)
+            or kwargs.pop("host", None)
+            or os.getenv("LOCAL_VLLM_URL", LOCAL_VLLM_URL)
+        )
 
         # Pop commonly passed-in args so they are not also present in kwargs
         temperature = kwargs.pop("temperature", 0.0)
@@ -293,7 +323,6 @@ def patched_create_agent(*args, **kwargs):
 
     # default behavior
     return factory._orig_create_agent(*args, **kwargs)
-
 
 
 # Install the patch idempotently
