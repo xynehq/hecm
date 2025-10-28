@@ -2,7 +2,8 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+logs/
+repos_cache/
 # C extensions
 *.so
 alo.py
