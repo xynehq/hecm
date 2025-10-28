@@ -6,7 +6,7 @@ from hecm.eval_harness import ClaudeProxyEvaluator, JuspayHyperswitchLocalTestEx
 
 @weave.op
 def test_claude_code_eval():
-    executor = JuspayHyperswitchLocalTestExecutor()
+    executor = JuspayHyperswitchLocalTestExecutor(show_output_logs=True)
     evaluator = ClaudeProxyEvaluator(
         executor=executor,
         anthropic_base_url="http://localhost:8082",
