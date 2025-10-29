@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -529,6 +530,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         dataset: str | object,
         max_data_points: Optional[int] = None,
         start_proxy: bool = True,
+        result_save_path: Optional[str] = None,
     ):
         # load dataset if string
         ds = (
@@ -557,5 +559,9 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         finally:
             if start_proxy:
                 self.stop_proxy()
+
+        if result_save_path is not None:
+            with open(result_save_path, "w") as f:
+                json.dump(results, f, indent=4)
 
         return results
