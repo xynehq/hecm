@@ -33,7 +33,7 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cd {repo_dir} && git switch --detach {data_point.base_commit}",
         ]:
             result = subprocess.run(
-                command, shell=True, check=True, env=self.environment
+                command, shell=True, capture_output=True, text=True, env=self.environment
             )
             self.command_results.append(
                 {
@@ -58,7 +58,7 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cd {repo_dir} && docker compose --help",
         ]:
             result = subprocess.run(
-                command, shell=True, check=True, env=self.environment
+                command, shell=True, capture_output=True, text=True, env=self.environment
             )
             self.command_results.append(
                 {
@@ -73,7 +73,8 @@ class JuspayHyperswitchLocalTestExecutor:
         result = subprocess.run(
             f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
             shell=True,
-            check=True,
+            capture_output=True,
+            text=True,
             env=self.environment,
         )
         self.command_results.append(
@@ -113,7 +114,8 @@ class JuspayHyperswitchLocalTestExecutor:
         result = subprocess.run(
             f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
             shell=True,
-            check=True,
+            capture_output=True,
+            text=True,
             env=self.environment,
         )
         self.command_results.append(
@@ -124,6 +126,29 @@ class JuspayHyperswitchLocalTestExecutor:
                 "exit_code": result.returncode,
             }
         )
+
+    def execute_cypress_tests(self, repo_dir: str):
+        test_dir = os.path.join(repo_dir, "cypress-tests-v2")
+        for command in [
+            # install nodejs and npm
+            "sudo apt-get update",
+            "sudo apt-get install -y nodejs npm",
+            # install cypress dependencies
+            f"cd {test_dir} && npm install",
+            # run all tests in a headless manner
+            f"cd {test_dir} && npx cypress run",
+        ]:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, env=self.environment
+            )
+            self.command_results.append(
+                {
+                    "command": command,
+                    "stdout": result.stdout,
+                    "stderror": result.stderr,
+                    "exit_code": result.returncode,
+                }
+            )
 
     def execute_commands(
         self,
@@ -140,6 +165,7 @@ class JuspayHyperswitchLocalTestExecutor:
         self.clone_repository(data_point, repo_dir)
         self.apply_patch(data_point, repo_dir, predicted_patch=predicted_patch)
         self.docker_compose_up(repo_dir)
+        self.execute_cypress_tests(repo_dir)
         self.docker_compose_down(repo_dir)
 
     def execute(
