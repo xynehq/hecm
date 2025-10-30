@@ -17,11 +17,20 @@ class CommandExecutionResult(BaseModel):
     exit_code: int
 
 
+class EvaluationResult(BaseModel):
+    total_score: int
+    command_results: list[CommandExecutionResult]
+    docker_compose_up_success: bool = False
+    cypress_tests_success: bool = False
+    cargo_test_success: bool = False
+
+
 def execute_multiple_commands(
     commands: list[str], environment: dict[str, str]
 ) -> list[CommandExecutionResult]:
     command_results: list[CommandExecutionResult] = []
     for command in commands:
+        rich.print(f"[yellow]Executing command: {command}[/yellow]")
         result = subprocess.run(
             command,
             shell=True,
@@ -29,6 +38,7 @@ def execute_multiple_commands(
             text=True,
             env=environment,
         )
+        rich.print(f"[green]Command executed successfully![/green]")
         command_results.append(
             CommandExecutionResult(
                 command=command,
@@ -185,13 +195,36 @@ class JuspayHyperswitchLocalTestExecutor:
             rich.print(f"[red]Error executing commands: {e}[/red]")
             raise
         finally:
+            evaluation_results = self.get_evaluation_result()
+            rich.print(f"[cyan]Saving results to {result_save_path}[/cyan]")
             if result_save_path is not None:
                 with open(result_save_path, "w") as f:
                     json.dump(
-                        [result.model_dump() for result in self.command_results],
+                        {
+                            "command_results": [
+                                result.model_dump() for result in self.command_results
+                            ],
+                            "evaluation_results": evaluation_results.model_dump(),
+                        },
                         f,
                         indent=4,
                     )
             if os.path.exists(working_dir):
                 os.unlink(working_dir)
                 rich.print("[cyan]Local executor cleanup complete[/cyan]")
+            return evaluation_results
+
+    def get_evaluation_result(self) -> EvaluationResult:
+        evaluation_result = EvaluationResult(
+            total_score=0, command_results=self.command_results
+        )
+        if self.command_results[5].exit_code == 0:
+            evaluation_result.total_score += 1
+            evaluation_result.docker_compose_up_success = True
+        if self.command_results[9].exit_code == 0:
+            evaluation_result.total_score += 1
+            evaluation_result.cypress_tests_success = True
+        if self.command_results[10].exit_code == 0:
+            evaluation_result.total_score += 1
+            evaluation_result.cargo_test_success = True
+        return evaluation_result
