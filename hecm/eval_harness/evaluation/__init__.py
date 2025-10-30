@@ -1,3 +1,3 @@
-from hecm.eval_harness.evaluation.claude_agent_evaluator import ClaudeAgentEvaluator
+from hecm.eval_harness.evaluation.evaluator import Evaluator
 
-__all__ = ["ClaudeAgentEvaluator"]
+__all__ = ["Evaluator"]

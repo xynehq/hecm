@@ -183,7 +183,7 @@ class JuspayHyperswitchLocalTestExecutor:
         data_point: CodingAgentDataPoint,
         predicted_patch: str | None = None,
         result_save_path: os.PathLike | None = None,
-    ):
+    ) -> EvaluationResult:
         working_dir = None
         try:
             with TemporaryDirectory(prefix="hyperswitch-testcase-") as working_dir:
@@ -195,7 +195,7 @@ class JuspayHyperswitchLocalTestExecutor:
             rich.print(f"[red]Error executing commands: {e}[/red]")
             raise
         finally:
-            evaluation_results = self.get_evaluation_result()
+            evaluation_result = self.get_evaluation_result()
             rich.print(f"[cyan]Saving results to {result_save_path}[/cyan]")
             if result_save_path is not None:
                 with open(result_save_path, "w") as f:
@@ -204,7 +204,7 @@ class JuspayHyperswitchLocalTestExecutor:
                             "command_results": [
                                 result.model_dump() for result in self.command_results
                             ],
-                            "evaluation_results": evaluation_results.model_dump(),
+                            "evaluation_results": evaluation_result.model_dump(),
                         },
                         f,
                         indent=4,
@@ -212,7 +212,7 @@ class JuspayHyperswitchLocalTestExecutor:
             if os.path.exists(working_dir):
                 os.unlink(working_dir)
                 rich.print("[cyan]Local executor cleanup complete[/cyan]")
-            return evaluation_results
+            return evaluation_result
 
     def get_evaluation_result(self) -> EvaluationResult:
         evaluation_result = EvaluationResult(
