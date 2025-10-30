@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from tempfile import TemporaryDirectory
 
 import rich
@@ -54,6 +55,7 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cat > /tmp/change.patch <<'PATCH'\n{patch}\nPATCH",
             f"cd {repo_dir} && git stash && git apply /tmp/change.patch",
             f"rm /tmp/change.patch",
+            f"cd {repo_dir} && docker compose --help",
         ]:
             result = subprocess.run(
                 command, shell=True, check=True, env=self.environment
@@ -66,6 +68,36 @@ class JuspayHyperswitchLocalTestExecutor:
                     "exit_code": result.returncode,
                 }
             )
+
+    def docker_compose_up(self, repo_dir: str):
+        result = subprocess.run(
+            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+            shell=True,
+            check=True,
+            env=self.environment,
+        )
+        self.command_results.append(
+            {
+                "command": f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
+                "stdout": result.stdout,
+                "stderror": result.stderr,
+                "exit_code": result.returncode,
+            }
+        )
+        result = subprocess.run(
+            f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
+            shell=True,
+            check=True,
+            env=self.environment,
+        )
+        self.command_results.append(
+            {
+                "command": f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
+                "stdout": result.stdout,
+                "stderror": result.stderr,
+                "exit_code": result.returncode,
+            }
+        )
 
     def execute_commands(
         self,
@@ -80,7 +112,8 @@ class JuspayHyperswitchLocalTestExecutor:
         rich.print(f"[cyan]Base commit: {data_point.base_commit}[/cyan]")
 
         self.clone_repository(data_point, repo_dir)
-        self.apply_patch(data_point, repo_dir)
+        self.apply_patch(data_point, repo_dir, predicted_patch=predicted_patch)
+        self.docker_compose_up(repo_dir)
 
     def execute(
         self, data_point: CodingAgentDataPoint, predicted_patch: str | None = None
@@ -104,7 +137,7 @@ data_point = CodingAgentDataPoint.model_validate(dataset[0])
 test_executor = JuspayHyperswitchLocalTestExecutor(
     environment={
         "CYPRESS_CONNECTOR": "connector_id",
-        "CYPRESS_BASEURL": "base_url",
+        "CYPRESS_BASEURL": "http://localhost:8080",
         "DEBUG": "cypress:cli",
         "CYPRESS_ADMINAPIKEY": "admin_api_key",
         "CYPRESS_CONNECTOR_AUTH_FILE_PATH": "/Users/geekyrakshit/Workspace/athena/hecm/creds.json",
