@@ -15,7 +15,7 @@ class JuspayHyperswitchLocalTestExecutor:
         environment: dict[str, str] = None,
         cypress_test_suffix: str = ":payments",
         health_check_url: str = "http://localhost:8080/health",
-        health_check_timeout: int = 3000,
+        health_check_timeout: int = 720,
         health_check_interval: int = 5,
     ):
         self.environment = environment
@@ -84,6 +84,32 @@ class JuspayHyperswitchLocalTestExecutor:
                 "exit_code": result.returncode,
             }
         )
+
+        # Poll for the health check
+        start_time = time.time()
+        while time.time() - start_time < self.health_check_timeout:
+            rich.print(
+                f"[cyan]Polling {self.health_check_url} for health check...[/cyan]"
+            )
+            try:
+                result = subprocess.run(
+                    ["curl", "--head", "--request", "GET", self.health_check_url],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if result.returncode == 0:
+                    rich.print(
+                        f"[green]Hyperswitch is ready at {self.health_check_url}[/green]"
+                    )
+                    return True
+            except subprocess.TimeoutExpired:
+                rich.print("[red]Health check timed out[/red]")
+                raise TimeoutError(
+                    f"Hyperswitch health check failed after {self.health_check_timeout} seconds"
+                )
+            time.sleep(self.health_check_interval)
+
+    def docker_compose_down(self, repo_dir: str):
         result = subprocess.run(
             f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
             shell=True,
@@ -114,6 +140,7 @@ class JuspayHyperswitchLocalTestExecutor:
         self.clone_repository(data_point, repo_dir)
         self.apply_patch(data_point, repo_dir, predicted_patch=predicted_patch)
         self.docker_compose_up(repo_dir)
+        self.docker_compose_down(repo_dir)
 
     def execute(
         self, data_point: CodingAgentDataPoint, predicted_patch: str | None = None
