@@ -33,7 +33,11 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cd {repo_dir} && git switch --detach {data_point.base_commit}",
         ]:
             result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, env=self.environment
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                env=self.environment,
             )
             self.command_results.append(
                 {
@@ -55,10 +59,13 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cat > /tmp/change.patch <<'PATCH'\n{patch}\nPATCH",
             f"cd {repo_dir} && git stash && git apply /tmp/change.patch",
             f"rm /tmp/change.patch",
-            f"cd {repo_dir} && docker compose --help",
         ]:
             result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, env=self.environment
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                env=self.environment,
             )
             self.command_results.append(
                 {
@@ -139,7 +146,31 @@ class JuspayHyperswitchLocalTestExecutor:
             f"cd {test_dir} && npx cypress run",
         ]:
             result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, env=self.environment
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                env=self.environment,
+            )
+            self.command_results.append(
+                {
+                    "command": command,
+                    "stdout": result.stdout,
+                    "stderror": result.stderr,
+                    "exit_code": result.returncode,
+                }
+            )
+
+    def execute_cargo_test(self, repo_dir: str):
+        for command in [
+            f"cd {repo_dir} && cargo test",
+        ]:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                env=self.environment,
             )
             self.command_results.append(
                 {
@@ -166,6 +197,7 @@ class JuspayHyperswitchLocalTestExecutor:
         self.apply_patch(data_point, repo_dir, predicted_patch=predicted_patch)
         self.docker_compose_up(repo_dir)
         self.execute_cypress_tests(repo_dir)
+        self.execute_cargo_test(repo_dir)
         self.docker_compose_down(repo_dir)
 
     def execute(
