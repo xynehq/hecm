@@ -57,9 +57,9 @@ class ClaudeCodeProxyAgent:
         openai_base_url: str = "http://127.0.0.1:8005/v1",
         openai_api_key: str = "dummy",
         openai_model: str = "archit11/Kwaipilot-KAT-Dev-Merged",
-        big_model: str | None = None,
-        small_model: str | None = None,
-        middle_model: str | None = None,
+        big_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
+        small_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
+        middle_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
         auto_clone: bool = True,
         proxy_startup_wait: int = 5,
         log_dir: str | os.PathLike | None = None,
@@ -409,10 +409,6 @@ class ClaudeCodeProxyAgent:
         try:
             if start_proxy:
                 self.start_proxy()
-        except Exception as e:
-            self.logger.error(f"Error starting proxy: {e}")
-            raise
-
             # Prepare repo copy at base commit
             test_repo = self._setup_test_repo(data_point)
 

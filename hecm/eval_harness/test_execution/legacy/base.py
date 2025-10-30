@@ -51,7 +51,7 @@ class BaseSandboxedExecutor(ABC):
         self.client = docker.from_env()
         self.container = None
         self.create_container()
-        self.repo_dir = os.path.join(self.working_dir.name, "repo")
+        self.repo_dir = os.path.join(self.working_dir, "repo")
 
     def create_container(self):
         # Pull the image if not available

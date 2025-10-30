@@ -3,10 +3,14 @@ import subprocess
 import time
 from typing import Dict, List, Optional
 
+import rich
+
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
-from hecm.eval_harness.test_execution.base import (
+from hecm.eval_harness.test_execution.legacy.base import (
     BaseLocalExecutor,
     BaseSandboxedExecutor,
+    CommandExecutionResult,
+    DataPointExecutionSummary,
 )
 
 
@@ -250,3 +254,34 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         )
         for cmd in commands_after_health_check:
             subprocess.run(cmd, shell=True, check=True, env=self.environment)
+
+        command_execution_results = []
+        for cmd in commands_before_health_check:
+            command_execution_results.append(
+                CommandExecutionResult(
+                    command=cmd,
+                    exit_code=0,
+                    output="",
+                )
+            )
+
+        return DataPointExecutionSummary(
+            instance_id=data_point.instance_id,
+            repo=data_point.repo,
+            base_commit=data_point.base_commit,
+            all_commands_executed_successfully=True,
+            command_results=command_execution_results,
+        )
+
+    def cleanup(self):
+        try:
+            subprocess.run(
+                f"cd {self.repo_dir} && docker compose --file docker-compose-development.yml down",
+                shell=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            rich.print(
+                f"[red]Error during cleanup: {subprocess.CalledProcessError}[/red]"
+            )
+        super().cleanup()

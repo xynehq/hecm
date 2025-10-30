@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import shutil
@@ -15,10 +14,14 @@ from tqdm.auto import tqdm
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
 from hecm.eval_harness.evaluation.base import BaseEvaluator
-from hecm.eval_harness.test_execution.base import (
+from hecm.eval_harness.test_execution.legacy.base import (
     BaseLocalExecutor,
     BaseSandboxedExecutor,
 )
+
+# -------------------------------
+# Logging helper (keeps behaviour from original)
+# -------------------------------
 
 
 def setup_logging(log_dir: Path, debug: bool = False):
@@ -530,7 +533,6 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         dataset: str | object,
         max_data_points: Optional[int] = None,
         start_proxy: bool = True,
-        result_save_path: Optional[str] = None,
     ):
         # load dataset if string
         ds = (
@@ -560,8 +562,63 @@ class ClaudeProxyEvaluator(BaseEvaluator):
             if start_proxy:
                 self.stop_proxy()
 
-        if result_save_path is not None:
-            with open(result_save_path, "w") as f:
-                json.dump(results, f, indent=4)
-
         return results
+
+
+def main():
+    import os
+
+    import datasets
+
+    from hecm.dataset_generation.schemas import CodingAgentDataPoint
+    from hecm.eval_harness.test_execution.legacy.base import BaseLocalExecutor
+
+    """Simple test entrypoint for ClaudeProxyEvaluator."""
+    # Initialize a local executor (or use your sandboxed one)
+    executor = BaseLocalExecutor()
+
+    # Instantiate evaluator
+    evaluator = ClaudeProxyEvaluator(
+        executor=executor,
+        anthropic_base_url="http://localhost:8082",
+        anthropic_api_key="dummy",
+        openai_base_url="http://127.0.0.1:8005/v1",
+        openai_api_key="dummy",
+        openai_model="Qwen/Qwen3-Coder-30B-A3B-Instruct",
+        log_dir="./logs",
+        debug=True,
+    )
+
+    # Start proxy manually (optional)
+    evaluator.start_proxy()
+
+    # Create a fake minimal CodingAgentDataPoint for testing
+    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
+    data_point = CodingAgentDataPoint.model_validate(dataset[0])
+    # data_point = CodingAgentDataPoint(
+    #     instance_id="test_001",
+    #     repo="fuergaosi233/claude-code-proxy",
+    #     problem_statement="Fix a typo in the README file.",
+    #     base_commit="main",
+    #     patch="",
+    #     test_patch="",
+    #     hints_text="",
+    #     test_instructions="",
+    # )
+
+    # Run one test sample
+    result = evaluator.get_agent_response(data_point)
+
+    print("\n===== ClaudeProxyEvaluator Test Result =====")
+    for key, value in result.items():
+        if isinstance(value, str) and len(value) > 300:
+            print(f"{key}: {value[:300]}... [truncated]")
+        else:
+            print(f"{key}: {value}")
+
+    # Stop proxy after test
+    evaluator.stop_proxy()
+
+
+if __name__ == "__main__":
+    main()

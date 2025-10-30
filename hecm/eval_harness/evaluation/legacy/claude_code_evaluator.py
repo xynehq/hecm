@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -18,10 +19,6 @@ from hecm.eval_harness.test_execution.base import (
     BaseLocalExecutor,
     BaseSandboxedExecutor,
 )
-
-# -------------------------------
-# Logging helper (keeps behaviour from original)
-# -------------------------------
 
 
 def setup_logging(log_dir: Path, debug: bool = False):
@@ -421,7 +418,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                                 diff += f"+{line}\n"
                     except Exception:
                         pass
-
+            logging.info("diff generated successfully {diff}")
             return diff
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to get git diff: {e}")
@@ -533,6 +530,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         dataset: str | object,
         max_data_points: Optional[int] = None,
         start_proxy: bool = True,
+        result_save_path: Optional[str] = None,
     ):
         # load dataset if string
         ds = (
@@ -548,77 +546,33 @@ class ClaudeProxyEvaluator(BaseEvaluator):
             self.start_proxy()
 
         try:
-            for sample in tqdm(ds, desc="Evaluating dataset", total=len(ds)):
+            for sample in ds:
                 data_point = CodingAgentDataPoint.model_validate(sample)
                 res = self.get_agent_response(data_point)
                 # executor integration: run provided executor on data_point if desired
                 try:
+                    logging.info(f"Running executor for {data_point.instance_id}")
                     exec_res = self.executor.execute(data_point)
                     self.executor.cleanup()
-                except Exception:
+                except Exception as e:
                     exec_res = None
-                results.append({"agent_result": res, "executor_result": exec_res})
+                    self.logger.error(f"Error during execution: {e}")
+                finally:
+                    self.executor.cleanup()
+                    results.append(
+                        {
+                            "agent_result": res,
+                            "executor_result": exec_res.model_dump()
+                            if exec_res
+                            else None,
+                        }
+                    )
         finally:
             if start_proxy:
                 self.stop_proxy()
 
+        if result_save_path is not None:
+            with open(result_save_path, "w") as f:
+                json.dump(results, f, indent=4)
+
         return results
-
-
-def main():
-    import os
-
-    import datasets
-
-    from hecm.dataset_generation.schemas import CodingAgentDataPoint
-    from hecm.eval_harness.test_execution.base import BaseLocalExecutor
-
-    """Simple test entrypoint for ClaudeProxyEvaluator."""
-    # Initialize a local executor (or use your sandboxed one)
-    executor = BaseLocalExecutor()
-
-    # Instantiate evaluator
-    evaluator = ClaudeProxyEvaluator(
-        executor=executor,
-        anthropic_base_url="http://localhost:8082",
-        anthropic_api_key="dummy",
-        openai_base_url="http://127.0.0.1:8005/v1",
-        openai_api_key="dummy",
-        openai_model="Qwen/Qwen3-Coder-30B-A3B-Instruct",
-        log_dir="./logs",
-        debug=True,
-    )
-
-    # Start proxy manually (optional)
-    evaluator.start_proxy()
-
-    # Create a fake minimal CodingAgentDataPoint for testing
-    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-    data_point = CodingAgentDataPoint.model_validate(dataset[0])
-    # data_point = CodingAgentDataPoint(
-    #     instance_id="test_001",
-    #     repo="fuergaosi233/claude-code-proxy",
-    #     problem_statement="Fix a typo in the README file.",
-    #     base_commit="main",
-    #     patch="",
-    #     test_patch="",
-    #     hints_text="",
-    #     test_instructions="",
-    # )
-
-    # Run one test sample
-    result = evaluator.get_agent_response(data_point)
-
-    print("\n===== ClaudeProxyEvaluator Test Result =====")
-    for key, value in result.items():
-        if isinstance(value, str) and len(value) > 300:
-            print(f"{key}: {value[:300]}... [truncated]")
-        else:
-            print(f"{key}: {value}")
-
-    # Stop proxy after test
-    evaluator.stop_proxy()
-
-
-if __name__ == "__main__":
-    main()
