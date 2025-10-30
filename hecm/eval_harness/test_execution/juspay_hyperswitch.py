@@ -1,11 +1,43 @@
+import json
 import os
 import subprocess
 import time
 from tempfile import TemporaryDirectory
 
 import rich
+from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+
+
+class CommandExecutionResult(BaseModel):
+    command: str
+    stdout: str
+    stderror: str
+    exit_code: int
+
+
+def execute_multiple_commands(
+    commands: list[str], environment: dict[str, str]
+) -> list[CommandExecutionResult]:
+    command_results: list[CommandExecutionResult] = []
+    for command in commands:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        command_results.append(
+            CommandExecutionResult(
+                command=command,
+                stdout=result.stdout,
+                stderror=result.stderr,
+                exit_code=result.returncode,
+            )
+        )
+    return command_results
 
 
 class JuspayHyperswitchLocalTestExecutor:
@@ -22,30 +54,19 @@ class JuspayHyperswitchLocalTestExecutor:
         self.health_check_url = health_check_url
         self.health_check_timeout = health_check_timeout
         self.health_check_interval = health_check_interval
-        self.command_results: list[dict[str, str]] = []
+        self.command_results: list[CommandExecutionResult] = []
 
     def clone_repository(self, data_point: CodingAgentDataPoint, repo_dir: str):
-        for command in [
-            # Clone the repository
-            f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
-            # Checkout the base commit
-            f"cd {repo_dir} && git switch --detach {data_point.base_commit}",
-        ]:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                env=self.environment,
-            )
-            self.command_results.append(
-                {
-                    "command": command,
-                    "stdout": result.stdout,
-                    "stderror": result.stderr,
-                    "exit_code": result.returncode,
-                }
-            )
+        command_results = execute_multiple_commands(
+            [
+                # Clone the repository
+                f"git clone https://github.com/{data_point.repo}.git {repo_dir}",
+                # Checkout the base commit
+                f"cd {repo_dir} && git switch --detach {data_point.base_commit}",
+            ],
+            self.environment,
+        )
+        self.command_results.extend(command_results)
 
     def apply_patch(
         self,
@@ -54,43 +75,24 @@ class JuspayHyperswitchLocalTestExecutor:
         predicted_patch: str | None = None,
     ):
         patch = data_point.patch if predicted_patch is None else predicted_patch
-        for command in [
-            f"cat > /tmp/change.patch <<'PATCH'\n{patch}\nPATCH",
-            f"cd {repo_dir} && git stash && git apply /tmp/change.patch",
-            f"rm /tmp/change.patch",
-        ]:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                env=self.environment,
-            )
-            self.command_results.append(
-                {
-                    "command": command,
-                    "stdout": result.stdout,
-                    "stderror": result.stderr,
-                    "exit_code": result.returncode,
-                }
-            )
+        command_results = execute_multiple_commands(
+            [
+                f"cat > /tmp/change.patch <<'PATCH'\n{patch}\nPATCH",
+                f"cd {repo_dir} && git stash && git apply /tmp/change.patch",
+                f"rm /tmp/change.patch",
+            ],
+            self.environment,
+        )
+        self.command_results.extend(command_results)
 
     def docker_compose_up(self, repo_dir: str):
-        result = subprocess.run(
-            f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
-            shell=True,
-            capture_output=True,
-            text=True,
-            env=self.environment,
+        command_results = execute_multiple_commands(
+            [
+                f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d"
+            ],
+            self.environment,
         )
-        self.command_results.append(
-            {
-                "command": f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d",
-                "stdout": result.stdout,
-                "stderror": result.stderr,
-                "exit_code": result.returncode,
-            }
-        )
+        self.command_results.extend(command_results)
 
         # Poll for the health check
         start_time = time.time()
@@ -117,68 +119,35 @@ class JuspayHyperswitchLocalTestExecutor:
             time.sleep(self.health_check_interval)
 
     def docker_compose_down(self, repo_dir: str):
-        result = subprocess.run(
-            f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
-            shell=True,
-            capture_output=True,
-            text=True,
-            env=self.environment,
+        result = execute_multiple_commands(
+            [
+                f"cd {repo_dir} && docker compose --file docker-compose-development.yml down"
+            ],
+            self.environment,
         )
-        self.command_results.append(
-            {
-                "command": f"cd {repo_dir} && docker compose --file docker-compose-development.yml down",
-                "stdout": result.stdout,
-                "stderror": result.stderr,
-                "exit_code": result.returncode,
-            }
-        )
+        self.command_results.extend(result)
 
     def execute_cypress_tests(self, repo_dir: str):
         test_dir = os.path.join(repo_dir, "cypress-tests-v2")
-        for command in [
-            # install nodejs and npm
-            "sudo apt-get update",
-            "sudo apt-get install -y nodejs npm",
-            # install cypress dependencies
-            f"cd {test_dir} && npm install",
-            # run all tests in a headless manner
-            f"cd {test_dir} && npx cypress run",
-        ]:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                env=self.environment,
-            )
-            self.command_results.append(
-                {
-                    "command": command,
-                    "stdout": result.stdout,
-                    "stderror": result.stderr,
-                    "exit_code": result.returncode,
-                }
-            )
+        command_results = execute_multiple_commands(
+            [
+                # install nodejs and npm
+                "sudo apt-get update",
+                "sudo apt-get install -y nodejs npm",
+                # install cypress dependencies
+                f"cd {test_dir} && npm install",
+                # run all tests in a headless manner
+                f"cd {test_dir} && npx cypress run",
+            ],
+            self.environment,
+        )
+        self.command_results.extend(command_results)
 
     def execute_cargo_test(self, repo_dir: str):
-        for command in [
-            f"cd {repo_dir} && cargo test",
-        ]:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                env=self.environment,
-            )
-            self.command_results.append(
-                {
-                    "command": command,
-                    "stdout": result.stdout,
-                    "stderror": result.stderr,
-                    "exit_code": result.returncode,
-                }
-            )
+        command_results = execute_multiple_commands(
+            [f"cd {repo_dir} && cargo test"], self.environment
+        )
+        self.command_results.extend(command_results)
 
     def execute_commands(
         self,
@@ -200,7 +169,10 @@ class JuspayHyperswitchLocalTestExecutor:
         self.docker_compose_down(repo_dir)
 
     def execute(
-        self, data_point: CodingAgentDataPoint, predicted_patch: str | None = None
+        self,
+        data_point: CodingAgentDataPoint,
+        predicted_patch: str | None = None,
+        result_save_path: os.PathLike | None = None,
     ):
         working_dir = None
         try:
@@ -213,6 +185,13 @@ class JuspayHyperswitchLocalTestExecutor:
             rich.print(f"[red]Error executing commands: {e}[/red]")
             raise
         finally:
+            if result_save_path is not None:
+                with open(result_save_path, "w") as f:
+                    json.dump(
+                        [result.model_dump() for result in self.command_results],
+                        f,
+                        indent=4,
+                    )
             if os.path.exists(working_dir):
                 os.unlink(working_dir)
                 rich.print("[cyan]Local executor cleanup complete[/cyan]")
