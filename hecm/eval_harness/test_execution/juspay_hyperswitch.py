@@ -39,6 +39,12 @@ def execute_multiple_commands(
             env=environment,
         )
         rich.print(f"[green]Command executed successfully![/green]")
+        rich.print(f"[cyan]Command: {command}[/cyan]")
+        if result.stdout:
+            rich.print(f"[blue]Stdout:\n{result.stdout}[/blue]")
+        if result.stderr:
+            rich.print(f"[red]Stderr:\n{result.stderr}[/red]")
+        rich.print(f"[magenta]Exit code: {result.returncode}[/magenta]")
         command_results.append(
             CommandExecutionResult(
                 command=command,
@@ -98,7 +104,7 @@ class JuspayHyperswitchLocalTestExecutor:
     def docker_compose_up(self, repo_dir: str):
         command_results = execute_multiple_commands(
             [
-                f"cd {repo_dir} && docker compose --file docker-compose-development.yml up -d"
+                f"cd {repo_dir} && sudo  docker compose --file docker-compose-development.yml up -d"
             ],
             self.environment,
         )
@@ -131,7 +137,10 @@ class JuspayHyperswitchLocalTestExecutor:
     def docker_compose_down(self, repo_dir: str):
         result = execute_multiple_commands(
             [
-                f"cd {repo_dir} && docker compose --file docker-compose-development.yml down"
+                f"cd {repo_dir} && sudo docker compose --file docker-compose-development.yml down",
+                f"cd {repo_dir} && sudo docker system prune -f",
+                f"sudo rm -rf /var/lib/docker/volumes/repo_router_build_cache/_data",
+                f"sudo rm -rf /var/lib/docker/volumes/workspace_router_build_cache/_data^"
             ],
             self.environment,
         )

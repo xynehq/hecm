@@ -9,6 +9,6 @@ if __name__ == "__main__":
     evaluator.evaluate(
         dataset="juspay/hyperswitch",
         split="train",
-        max_data_points=2,
-        result_save_path="results.json",
+        max_data_points=8,
+        result_save_path="results2.json",
     )

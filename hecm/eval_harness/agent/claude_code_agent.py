@@ -401,19 +401,21 @@ class ClaudeCodeProxyAgent:
     def get_agent_response(
         self,
         data_point: CodingAgentDataPoint,
-        start_proxy: bool = False,
-        stop_proxy: bool = False,
+        start_proxy: bool = True,
+        stop_proxy: bool = True,
     ) -> str:
         start_time = datetime.now()
         test_repo = None
         try:
             if start_proxy:
+                self.logger.info("Starting proxy for agent response...")
                 self.start_proxy()
             # Prepare repo copy at base commit
             test_repo = self._setup_test_repo(data_point)
 
             # Build directive prompt similar to original script
             directive_prompt = f"""{data_point.problem_statement}\nIMPORTANT: You must actually edit the files to fix this issue. Do not just explain what needs to be done.\nMake the necessary code changes directly."""
+            self.logger.info(f"Directive Prompt:\n{directive_prompt}")
 
             stdout, stderr, exit_code, log_file = self._run_claude_command(
                 prompt=directive_prompt,
@@ -424,6 +426,8 @@ class ClaudeCodeProxyAgent:
 
             claude_patch = self._get_git_diff(test_repo)
             files_changed = self._get_changed_files(test_repo)
+            self.logger.info(f"patch:\n{claude_patch}")
+            self.logger.info(f"files changed: {files_changed}")
 
             success = exit_code == 0 and bool(claude_patch)
             execution_time = (datetime.now() - start_time).total_seconds()
