@@ -9,10 +9,22 @@ from pathlib import Path
 from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.agent.base import AgentResponse, BaseAgent
 
 
-def setup_logging(log_dir: Path, debug: bool = False):
-    """Setup logging configuration."""
+def setup_logging(log_dir: Path, debug: bool = False) -> logging.Logger:
+    """Setup logging configuration for `ClaudeCodeProxyAgent`.
+
+    Args:
+        log_dir (Path): The directory to save the logs.
+        debug (bool): Whether to enable debug logging.
+
+    Returns:
+        logging.Logger: The logger for `ClaudeCodeProxyAgent`.
+
+    Raises:
+        ValueError: If `log_dir` is not a valid path.
+    """
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_level = logging.DEBUG if debug else logging.INFO
@@ -47,7 +59,40 @@ def setup_logging(log_dir: Path, debug: bool = False):
     return logger
 
 
-class ClaudeCodeProxyAgent:
+class ClaudeCodeProxyAgent(BaseAgent):
+    """
+    ClaudeCodeProxyAgent is a agent that uses run Claude Code with a
+    proxy server to get the response from a model remotely hosted using vLLM.
+
+    !!! example
+        ```python
+        agent = ClaudeCodeProxyAgent()
+        response = agent.get_agent_response(data_point, start_proxy=True, stop_proxy=True)
+        ```
+
+    Args:
+        proxy_repo_path (str | os.PathLike | None): The path to the proxy repository.
+        proxy_repo_url (str): The URL of the proxy repository.
+        anthropic_base_url (str): The base URL of the Anthropic API.
+        anthropic_api_key (str): The API key for the Anthropic API.
+
+    Attributes:
+        proxy_repo_path (Path): The path to the proxy repository.
+        proxy_repo_url (str): The URL of the proxy repository.
+        anthropic_base_url (str): The base URL of the Anthropic API.
+        anthropic_api_key (str): The API key for the Anthropic API.
+        openai_base_url (str): The base URL of the OpenAI API.
+        openai_api_key (str): The API key for the OpenAI API.
+        openai_model (str): The model to use for the OpenAI API.
+        big_model (str | None): The model to use for the Big Model.
+        small_model (str | None): The model to use for the Small Model.
+        middle_model (str | None): The model to use for the Middle Model.
+        auto_clone (bool): Whether to auto clone the proxy repository.
+        proxy_startup_wait (int): The wait time for the proxy to start.
+        log_dir (str | os.PathLike | None): The directory to save the logs.
+        debug (bool): Whether to enable debug logging.
+    """
+
     def __init__(
         self,
         proxy_repo_path: str | os.PathLike | None = None,
@@ -64,7 +109,10 @@ class ClaudeCodeProxyAgent:
         proxy_startup_wait: int = 5,
         log_dir: str | os.PathLike | None = None,
         debug: bool = False,
+        *args,
+        **kwargs,
     ):
+        super().__init__(*args, **kwargs)
         if proxy_repo_path is None:
             self.proxy_repo_path = Path(tempfile.gettempdir()) / "claude-code-proxy"
         else:
@@ -136,6 +184,7 @@ class ClaudeCodeProxyAgent:
         return env
 
     def start_proxy(self):
+        """Start the proxy server for the agent response."""
         if self.proxy_process is not None:
             self.logger.warning("Proxy already running")
             return
@@ -178,6 +227,7 @@ class ClaudeCodeProxyAgent:
             raise
 
     def stop_proxy(self):
+        """Stop the proxy server for the agent response."""
         if self.proxy_process is None:
             return
         self.logger.info("Stopping claude-code-proxy...")
@@ -403,7 +453,17 @@ class ClaudeCodeProxyAgent:
         data_point: CodingAgentDataPoint,
         start_proxy: bool = True,
         stop_proxy: bool = True,
-    ) -> str:
+    ) -> AgentResponse:
+        """Get the agent response for the given data point.
+
+        Args:
+            data_point (CodingAgentDataPoint): The data point to get the agent response for.
+            start_proxy (bool): Whether to start the proxy server for the agent response.
+            stop_proxy (bool): Whether to stop the proxy server for the agent response.
+
+        Returns:
+            AgentResponse: The agent response for the given data point.
+        """
         start_time = datetime.now()
         test_repo = None
         try:
@@ -432,31 +492,31 @@ class ClaudeCodeProxyAgent:
             success = exit_code == 0 and bool(claude_patch)
             execution_time = (datetime.now() - start_time).total_seconds()
 
-            return {
-                "claude_patch": claude_patch,
-                "files_changed": files_changed,
-                "success": success,
-                "execution_time": execution_time,
-                "claude_log_file": log_file,
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
-            }
+            return AgentResponse(
+                patch=claude_patch,
+                files_changed=files_changed,
+                success=success,
+                execution_time=execution_time,
+                log_file=log_file,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+            )
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             self.logger.error(
                 f"Error processing {data_point.instance_id}: {e}", exc_info=True
             )
-            return {
-                "claude_patch": "",
-                "files_changed": [],
-                "success": False,
-                "execution_time": execution_time,
-                "claude_log_file": None,
-                "stdout": "",
-                "stderr": str(e),
-                "exit_code": -1,
-            }
+            return AgentResponse(
+                patch="",
+                files_changed=[],
+                success=False,
+                execution_time=execution_time,
+                log_file=None,
+                stdout="",
+                stderr=str(e),
+                exit_code=-1,
+            )
         finally:
             if stop_proxy:
                 self.stop_proxy()

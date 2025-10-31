@@ -5,58 +5,60 @@ import time
 from tempfile import TemporaryDirectory
 
 import rich
-from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.test_execution.base import (
+    BaseLocalExecutor,
+    CommandExecutionResult,
+    EvaluationResult,
+    execute_multiple_commands,
+)
 
 
-class CommandExecutionResult(BaseModel):
-    command: str
-    stdout: str
-    stderror: str
-    exit_code: int
+class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
+    """Executor for Juspay Hyperswitch in the local environment.
+
+    !!! example
+        ```python
+        from datasets import load_dataset
+        from hecm.dataset_generation.schemas import CodingAgentDataPoint
+        from hecm.eval_harness.agent import ClaudeCodeProxyAgent
+        from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
 
 
-class EvaluationResult(BaseModel):
-    total_score: int
-    command_results: list[CommandExecutionResult]
-    docker_compose_up_success: bool = False
-    cypress_tests_success: bool = False
-    cargo_test_success: bool = False
-
-
-def execute_multiple_commands(
-    commands: list[str], environment: dict[str, str]
-) -> list[CommandExecutionResult]:
-    command_results: list[CommandExecutionResult] = []
-    for command in commands:
-        rich.print(f"[yellow]Executing command: {command}[/yellow]")
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            env=environment,
+        dataset = load_dataset("juspay/hyperswitch", split="train")
+        data_point = CodingAgentDataPoint.model_validate(dataset[0])
+        agent = ClaudeCodeProxyAgent()
+        response = agent.get_agent_response(data_point, start_proxy=True, stop_proxy=True)
+        test_executor = JuspayHyperswitchLocalTestExecutor(
+            environment={
+                "CYPRESS_CONNECTOR": "connector_id",
+                "CYPRESS_BASEURL": "http://localhost:8080",
+                "DEBUG": "cypress:cli",
+                "CYPRESS_ADMINAPIKEY": "admin_api_key",
+                "CYPRESS_CONNECTOR_AUTH_FILE_PATH": "/Users/geekyrakshit/Workspace/athena/hecm/creds.json",
+            },
         )
-        rich.print(f"[green]Command executed successfully![/green]")
-        rich.print(f"[cyan]Command: {command}[/cyan]")
-        if result.stdout:
-            rich.print(f"[blue]Stdout:\n{result.stdout}[/blue]")
-        if result.stderr:
-            rich.print(f"[red]Stderr:\n{result.stderr}[/red]")
-        rich.print(f"[magenta]Exit code: {result.returncode}[/magenta]")
-        command_results.append(
-            CommandExecutionResult(
-                command=command,
-                stdout=result.stdout,
-                stderror=result.stderr,
-                exit_code=result.returncode,
-            )
+        test_executor.execute(
+            data_point,
+            predicted_patch=response.patch,
+            result_save_path="results.json",
         )
-    return command_results
+        ```
+    !!! note
+        This executor uses the local environment to execute the commands.
+        It is not recommended to use this executor in a production environment.
+        It is only recommended to use this executor for testing purposes.
+        Right now, we're using `JuspayHyperswitchLocalTestExecutor` to avoid the complexity of running docker-in-docker containers.
 
+    Args:
+        environment (dict[str, str]): The environment variables to use for the commands.
+        cypress_test_suffix (str): The suffix to add to the cypress test command.
+        health_check_url (str): The URL to check the health of the Hyperswitch.
+        health_check_timeout (int): The timeout for the health check.
+        health_check_interval (int): The interval for the health check.
+    """
 
-class JuspayHyperswitchLocalTestExecutor:
     def __init__(
         self,
         environment: dict[str, str] = None,
@@ -64,7 +66,10 @@ class JuspayHyperswitchLocalTestExecutor:
         health_check_url: str = "http://localhost:8080/health",
         health_check_timeout: int = 720,
         health_check_interval: int = 5,
+        *args,
+        **kwargs,
     ):
+        super().__init__(*args, **kwargs)
         self.environment = environment
         self.cypress_test_suffix = cypress_test_suffix
         self.health_check_url = health_check_url
@@ -73,6 +78,18 @@ class JuspayHyperswitchLocalTestExecutor:
         self.command_results: list[CommandExecutionResult] = []
 
     def clone_repository(self, data_point: CodingAgentDataPoint, repo_dir: str):
+        """Clone the repository for the given data point.
+
+        Args:
+            data_point (CodingAgentDataPoint): The data point to clone the repository for.
+            repo_dir (str): The directory to clone the repository to.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the repository cannot be cloned.
+        """
         command_results = execute_multiple_commands(
             [
                 # Clone the repository
@@ -90,6 +107,19 @@ class JuspayHyperswitchLocalTestExecutor:
         repo_dir: str,
         predicted_patch: str | None = None,
     ):
+        """Apply the patch for the given data point.
+
+        Args:
+            data_point (CodingAgentDataPoint): The data point to apply the patch for.
+            repo_dir (str): The directory to apply the patch to.
+            predicted_patch (str | None): The predicted patch to apply.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the patch cannot be applied.
+        """
         patch = data_point.patch if predicted_patch is None else predicted_patch
         command_results = execute_multiple_commands(
             [
@@ -102,6 +132,17 @@ class JuspayHyperswitchLocalTestExecutor:
         self.command_results.extend(command_results)
 
     def docker_compose_up(self, repo_dir: str):
+        """Start the docker compose for the given repository.
+
+        Args:
+            repo_dir (str): The directory to start the docker compose for.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the docker compose cannot be started.
+        """
         command_results = execute_multiple_commands(
             [
                 f"cd {repo_dir} && sudo  docker compose --file docker-compose-development.yml up -d"
@@ -135,18 +176,40 @@ class JuspayHyperswitchLocalTestExecutor:
             time.sleep(self.health_check_interval)
 
     def docker_compose_down(self, repo_dir: str):
+        """Stop the docker compose for the given repository.
+
+        Args:
+            repo_dir (str): The directory to stop the docker compose for.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the docker compose cannot be stopped.
+        """
         result = execute_multiple_commands(
             [
                 f"cd {repo_dir} && sudo docker compose --file docker-compose-development.yml down",
                 f"cd {repo_dir} && sudo docker system prune -f",
                 f"sudo rm -rf /var/lib/docker/volumes/repo_router_build_cache/_data",
-                f"sudo rm -rf /var/lib/docker/volumes/workspace_router_build_cache/_data^"
+                f"sudo rm -rf /var/lib/docker/volumes/workspace_router_build_cache/_data^",
             ],
             self.environment,
         )
         self.command_results.extend(result)
 
     def execute_cypress_tests(self, repo_dir: str):
+        """Execute the cypress tests for the given repository.
+
+        Args:
+            repo_dir (str): The directory to execute the cypress tests for.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the cypress tests cannot be executed.
+        """
         test_dir = os.path.join(repo_dir, "cypress-tests-v2")
         command_results = execute_multiple_commands(
             [
@@ -163,6 +226,17 @@ class JuspayHyperswitchLocalTestExecutor:
         self.command_results.extend(command_results)
 
     def execute_cargo_test(self, repo_dir: str):
+        """Execute the cargo test for the given repository.
+
+        Args:
+            repo_dir (str): The directory to execute the cargo test for.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the cargo test cannot be executed.
+        """
         command_results = execute_multiple_commands(
             [f"cd {repo_dir} && cargo test"], self.environment
         )
@@ -174,6 +248,19 @@ class JuspayHyperswitchLocalTestExecutor:
         repo_dir: str,
         predicted_patch: str | None = None,
     ):
+        """Execute the commands for the given data point.
+
+        Args:
+            data_point (CodingAgentDataPoint): The data point to execute the commands for.
+            repo_dir (str): The directory to execute the commands for.
+            predicted_patch (str | None): The predicted patch to apply.
+
+        Returns:
+            list[CommandExecutionResult]: The results of executing the commands.
+
+        Raises:
+            Exception: If the commands cannot be executed.
+        """
         rich.print(
             f"[bold cyan]Executing tests for: {data_point.instance_id}[/bold cyan]"
         )
@@ -193,6 +280,19 @@ class JuspayHyperswitchLocalTestExecutor:
         predicted_patch: str | None = None,
         result_save_path: os.PathLike | None = None,
     ) -> EvaluationResult:
+        """Execute the commands for the given data point.
+
+        Args:
+            data_point (CodingAgentDataPoint): The data point to execute the commands for.
+            predicted_patch (str | None): The predicted patch to apply.
+            result_save_path (os.PathLike | None): The path to save the results to.
+
+        Returns:
+            EvaluationResult: The evaluation result.
+
+        Raises:
+            Exception: If the commands cannot be executed.
+        """
         working_dir = None
         try:
             with TemporaryDirectory(prefix="hyperswitch-testcase-") as working_dir:
@@ -224,6 +324,11 @@ class JuspayHyperswitchLocalTestExecutor:
             return evaluation_result
 
     def get_evaluation_result(self) -> EvaluationResult:
+        """Get the evaluation result for the given data point.
+
+        Returns:
+            EvaluationResult: The evaluation result.
+        """
         evaluation_result = EvaluationResult(
             total_score=0, command_results=self.command_results
         )

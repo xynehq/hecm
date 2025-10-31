@@ -19,6 +19,16 @@ from hecm.utils.md_utils import extract_markdown_section
 
 
 class CodingAgentDataGenerator:
+    """Generator for coding agent evaluation data.
+
+    Args:
+        repo_owner (str): The owner of the repository.
+        repo_name (str): The name of the repository.
+        github_token (Optional[str]): The GitHub token to use for authentication.
+        gold_patch_ignore_dirs (List[str]): The directories to ignore in the gold patch.
+        test_dirs (List[str]): The directories to keep in the test patch.
+    """
+
     def __init__(
         self,
         repo_owner: str,
@@ -48,6 +58,14 @@ class CodingAgentDataGenerator:
         self.testing_instructions_subheading = testing_instructions_subheading
 
     def get_linked_prs(self, url: str) -> Union[List[int], None]:
+        """Get the linked PRs for a given issue.
+
+        Args:
+            url (str): The URL of the issue.
+
+        Returns:
+            Union[List[int], None]: The linked PRs.
+        """
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
@@ -59,6 +77,14 @@ class CodingAgentDataGenerator:
             return None
 
     def fetch_pr_data(self, pr_number: int) -> LinkedPR:
+        """Fetch the data for a given PR.
+
+        Args:
+            pr_number (int): The number of the PR.
+
+        Returns:
+            LinkedPR: The data for the given PR.
+        """
         url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()
@@ -85,6 +111,14 @@ class CodingAgentDataGenerator:
         )
 
     def get_patch(self, pr_number: int) -> str:
+        """Get the patch for a given PR.
+
+        Args:
+            pr_number (int): The number of the PR.
+
+        Returns:
+            Tuple[str, str]: The gold patch and the test patch.
+        """
         try:
             url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/pulls/{pr_number}"
             headers = self.headers.copy()
@@ -109,7 +143,15 @@ class CodingAgentDataGenerator:
         state: str = "closed",
         max_issues: Optional[int] = None,
     ) -> List[GithubIssue]:
-        """Helper function to fetch issues by state with pagination."""
+        """Helper function to fetch issues by state with pagination.
+
+        Args:
+            state (str): The state of the issues to fetch.
+            max_issues (Optional[int]): The maximum number of issues to fetch.
+
+        Returns:
+            List[GithubIssue]: The issues.
+        """
         issues = []
         per_page = 100  # Maximum allowed by GitHub API
 
@@ -213,6 +255,16 @@ class CodingAgentDataGenerator:
         max_issues: Optional[int] = None,
         save_to: Optional[os.PathLike] = None,
     ) -> List[GithubIssue]:
+        """Generate issues for a given repository.
+
+        Args:
+            issue_state (str): The state of the issues to fetch.
+            max_issues (Optional[int]): The maximum number of issues to fetch.
+            save_to (Optional[os.PathLike]): The path to save the issues to.
+
+        Returns:
+            List[GithubIssue]: The issues.
+        """
         issues = self.fetch_issues(issue_state, max_issues)
 
         if save_to:
@@ -230,6 +282,16 @@ class CodingAgentDataGenerator:
         max_workers: int = 10,
         save_to: Optional[os.PathLike] = None,
     ) -> List[GithubIssue]:
+        """Generate linked PRs for a given issues.
+
+        Args:
+            issues (List[GithubIssue]): The issues to generate linked PRs for.
+            max_workers (int): The maximum number of workers to use.
+            save_to (Optional[os.PathLike]): The path to save the linked PRs to.
+
+        Returns:
+            List[GithubIssue]: The linked PRs.
+        """
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._fetch_linked_pr_for_issue, issue): idx
@@ -258,6 +320,15 @@ class CodingAgentDataGenerator:
     def generate_data_points(
         self, issues: List[GithubIssue], max_workers: int = 10
     ) -> CodingAgentDataset:
+        """Generate data points for a given issues.
+
+        Args:
+            issues (List[GithubIssue]): The issues to generate data points for.
+            max_workers (int): The maximum number of workers to use.
+
+        Returns:
+            CodingAgentDataset: The data points.
+        """
         data_points: List[CodingAgentDataPoint] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
