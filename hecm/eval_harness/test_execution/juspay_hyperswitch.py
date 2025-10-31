@@ -8,55 +8,15 @@ import rich
 from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.test_execution.base import (
+    BaseLocalExecutor,
+    CommandExecutionResult,
+    EvaluationResult,
+    execute_multiple_commands,
+)
 
 
-class CommandExecutionResult(BaseModel):
-    command: str
-    stdout: str
-    stderror: str
-    exit_code: int
-
-
-class EvaluationResult(BaseModel):
-    total_score: int
-    command_results: list[CommandExecutionResult]
-    docker_compose_up_success: bool = False
-    cypress_tests_success: bool = False
-    cargo_test_success: bool = False
-
-
-def execute_multiple_commands(
-    commands: list[str], environment: dict[str, str]
-) -> list[CommandExecutionResult]:
-    command_results: list[CommandExecutionResult] = []
-    for command in commands:
-        rich.print(f"[yellow]Executing command: {command}[/yellow]")
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            env=environment,
-        )
-        rich.print(f"[green]Command executed successfully![/green]")
-        rich.print(f"[cyan]Command: {command}[/cyan]")
-        if result.stdout:
-            rich.print(f"[blue]Stdout:\n{result.stdout}[/blue]")
-        if result.stderr:
-            rich.print(f"[red]Stderr:\n{result.stderr}[/red]")
-        rich.print(f"[magenta]Exit code: {result.returncode}[/magenta]")
-        command_results.append(
-            CommandExecutionResult(
-                command=command,
-                stdout=result.stdout,
-                stderror=result.stderr,
-                exit_code=result.returncode,
-            )
-        )
-    return command_results
-
-
-class JuspayHyperswitchLocalTestExecutor:
+class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
     def __init__(
         self,
         environment: dict[str, str] = None,
@@ -64,6 +24,8 @@ class JuspayHyperswitchLocalTestExecutor:
         health_check_url: str = "http://localhost:8080/health",
         health_check_timeout: int = 720,
         health_check_interval: int = 5,
+        *args,
+        **kwargs,
     ):
         self.environment = environment
         self.cypress_test_suffix = cypress_test_suffix
@@ -71,6 +33,7 @@ class JuspayHyperswitchLocalTestExecutor:
         self.health_check_timeout = health_check_timeout
         self.health_check_interval = health_check_interval
         self.command_results: list[CommandExecutionResult] = []
+        super().__init__(*args, **kwargs)
 
     def clone_repository(self, data_point: CodingAgentDataPoint, repo_dir: str):
         command_results = execute_multiple_commands(
@@ -140,7 +103,7 @@ class JuspayHyperswitchLocalTestExecutor:
                 f"cd {repo_dir} && sudo docker compose --file docker-compose-development.yml down",
                 f"cd {repo_dir} && sudo docker system prune -f",
                 f"sudo rm -rf /var/lib/docker/volumes/repo_router_build_cache/_data",
-                f"sudo rm -rf /var/lib/docker/volumes/workspace_router_build_cache/_data^"
+                f"sudo rm -rf /var/lib/docker/volumes/workspace_router_build_cache/_data^",
             ],
             self.environment,
         )

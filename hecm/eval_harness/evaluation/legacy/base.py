@@ -50,9 +50,9 @@ class BaseEvaluator(ABC):
         )
         for idx, data_point in dataset_iterator:
             if self.executor.show_output_logs:
-                # rich.print(
-                #     f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
-                # )
+                rich.print(
+                    f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
+                )
             results = self.executor.execute(data_point)
             self.executor.cleanup()
             self.results.append(results)
