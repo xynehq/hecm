@@ -35,9 +35,9 @@ class Evaluator:
         evaluation_results: list[EvaluationResult] = []
         for idx, data_point in enumerate(dataset):
             data_point = CodingAgentDataPoint.model_validate(data_point)
-            rich.print(
-                f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
-            )
+            # rich.print(
+            #     f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
+            # )
             response = self.agent.get_agent_response(data_point)
             evaluation_result = self.executor.execute(
                 data_point, response["claude_patch"]
