@@ -418,7 +418,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                                 diff += f"+{line}\n"
                     except Exception:
                         pass
-
+            logging.info("diff generated successfully {diff}")
             return diff
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to get git diff: {e}")
@@ -546,16 +546,27 @@ class ClaudeProxyEvaluator(BaseEvaluator):
             self.start_proxy()
 
         try:
-            for sample in tqdm(ds, desc="Evaluating dataset", total=len(ds)):
+            for sample in ds:
                 data_point = CodingAgentDataPoint.model_validate(sample)
                 res = self.get_agent_response(data_point)
                 # executor integration: run provided executor on data_point if desired
                 try:
+                    logging.info(f"Running executor for {data_point.instance_id}")
                     exec_res = self.executor.execute(data_point)
                     self.executor.cleanup()
-                except Exception:
+                except Exception as e:
                     exec_res = None
-                results.append({"agent_result": res, "executor_result": exec_res})
+                    self.logger.error(f"Error during execution: {e}")
+                finally:
+                    self.executor.cleanup()
+                    results.append(
+                        {
+                            "agent_result": res,
+                            "executor_result": exec_res.model_dump()
+                            if exec_res
+                            else None,
+                        }
+                    )
         finally:
             if start_proxy:
                 self.stop_proxy()

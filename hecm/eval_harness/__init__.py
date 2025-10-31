@@ -1,11 +1,4 @@
-from hecm.eval_harness.evaluation.claude_code_evaluator import ClaudeProxyEvaluator
-from hecm.eval_harness.test_execution import (
-    JuspayHyperswitchLocalTestExecutor,
-    JuspayHyperswitchSandboxedTestExecutor,
-)
+from hecm.eval_harness.agent import ClaudeCodeProxyAgent
+from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
 
-__all__ = [
-    "ClaudeProxyEvaluator",
-    "JuspayHyperswitchLocalTestExecutor",
-    "JuspayHyperswitchSandboxedTestExecutor",
-]
+__all__ = ["ClaudeCodeProxyAgent", "JuspayHyperswitchLocalTestExecutor"]

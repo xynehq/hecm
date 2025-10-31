@@ -6,22 +6,9 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import weave
-from datasets import load_dataset
-from tqdm.auto import tqdm
+from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
-from hecm.eval_harness.evaluation.base import BaseEvaluator
-from hecm.eval_harness.test_execution.base import (
-    BaseLocalExecutor,
-    BaseSandboxedExecutor,
-)
-
-# -------------------------------
-# Logging helper (keeps behaviour from original)
-# -------------------------------
 
 
 def setup_logging(log_dir: Path, debug: bool = False):
@@ -60,57 +47,24 @@ def setup_logging(log_dir: Path, debug: bool = False):
     return logger
 
 
-# -------------------------------
-# ClaudeProxyEvaluator
-# -------------------------------
-class ClaudeProxyEvaluator(BaseEvaluator):
-    """
-    Evaluator that runs the claude-code-proxy approach from your original script
-    but implements it as a BaseEvaluator subclass. It retains the environment
-    variables and subprocess usage from the original implementation.
-
-    Usage:
-        evaluator = ClaudeProxyEvaluator(executor)
-        results = evaluator.evaluate(dataset_or_name, max_data_points=10)
-    """
-
+class ClaudeCodeProxyAgent:
     def __init__(
         self,
-        executor: Optional[BaseLocalExecutor | BaseSandboxedExecutor] = None,
-        proxy_repo_path: Optional[str] = None,
+        proxy_repo_path: str | os.PathLike | None = None,
         proxy_repo_url: str = "https://github.com/fuergaosi233/claude-code-proxy",
         anthropic_base_url: str = "http://localhost:8082",
         anthropic_api_key: str = "dummy",
         openai_base_url: str = "http://127.0.0.1:8005/v1",
         openai_api_key: str = "dummy",
-        openai_model: str = "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-        big_model: Optional[str] = None,
-        small_model: Optional[str] = None,
-        middle_model: Optional[str] = None,
+        openai_model: str = "archit11/Kwaipilot-KAT-Dev-Merged",
+        big_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
+        small_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
+        middle_model: str | None = "archit11/Kwaipilot-KAT-Dev-Merged",
         auto_clone: bool = True,
         proxy_startup_wait: int = 5,
-        log_dir: Optional[str] = None,
+        log_dir: str | os.PathLike | None = None,
         debug: bool = False,
     ):
-        # If executor is required by caller, pass it to BaseEvaluator. If None,
-        # create a dummy executor placeholder (some harnesses require one).
-        if executor is None:
-            # The BaseEvaluator requires an executor instance. If you don't have
-            # one, pass a simple object that has the attributes used in tests.
-            class _DummyExecutor:
-                show_output_logs = False
-
-                def execute(self, dp):
-                    return {}
-
-                def cleanup(self):
-                    return None
-
-            executor = _DummyExecutor()
-
-        super().__init__(executor)
-
-        # Paths and config
         if proxy_repo_path is None:
             self.proxy_repo_path = Path(tempfile.gettempdir()) / "claude-code-proxy"
         else:
@@ -150,11 +104,8 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         if auto_clone and not self.proxy_repo_path.exists():
             self._clone_proxy_repo()
 
-        self.logger.info("Initialized ClaudeProxyEvaluator")
+        self.logger.info("Initialized ClaudeCodeProxyAgent")
 
-    # -------------------------------
-    # Proxy lifecycle
-    # -------------------------------
     def _clone_proxy_repo(self):
         self.logger.info(f"Cloning {self.proxy_repo_url} to {self.proxy_repo_path}")
         try:
@@ -247,9 +198,6 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
         self.proxy_process = None
 
-    # -------------------------------
-    # Repo helpers (clone/update and prepare test repo)
-    # -------------------------------
     def _get_cached_repo_path(self, repo: str) -> Path:
         safe_name = repo.replace("/", "_").replace("\\", "_")
         return self.repos_cache_dir / safe_name
@@ -325,9 +273,6 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
         return temp_dir
 
-    # -------------------------------
-    # Running Claude CLI (keeps original cli invocation)
-    # -------------------------------
     def _run_claude_command(
         self, prompt: str, working_dir: Path, instance_id: str, timeout: int = 300
     ):
@@ -383,9 +328,6 @@ class ClaudeProxyEvaluator(BaseEvaluator):
             self.logger.error(f"Error running claude for {instance_id}: {e}")
             return "", str(e), -1, str(claude_log_file)
 
-    # -------------------------------
-    # Git helpers
-    # -------------------------------
     def _get_git_diff(self, repo_path: Path) -> str:
         try:
             result = subprocess.run(
@@ -421,7 +363,7 @@ class ClaudeProxyEvaluator(BaseEvaluator):
                                 diff += f"+{line}\n"
                     except Exception:
                         pass
-
+            logging.info("diff generated successfully {diff}")
             return diff
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to get git diff: {e}")
@@ -456,23 +398,24 @@ class ClaudeProxyEvaluator(BaseEvaluator):
         except subprocess.CalledProcessError:
             return []
 
-    # -------------------------------
-    # Core: implement BaseEvaluator.get_agent_response
-    # -------------------------------
-    @weave.op
-    def get_agent_response(self, data_point: CodingAgentDataPoint) -> Dict[str, Any]:
-        """
-        Runs the full flow for a single data point and returns a structured dict
-        containing stdout/stderr, patch, changed files, log path and timing info.
-        """
+    def get_agent_response(
+        self,
+        data_point: CodingAgentDataPoint,
+        start_proxy: bool = True,
+        stop_proxy: bool = True,
+    ) -> str:
         start_time = datetime.now()
         test_repo = None
         try:
+            if start_proxy:
+                self.logger.info("Starting proxy for agent response...")
+                self.start_proxy()
             # Prepare repo copy at base commit
             test_repo = self._setup_test_repo(data_point)
 
             # Build directive prompt similar to original script
             directive_prompt = f"""{data_point.problem_statement}\nIMPORTANT: You must actually edit the files to fix this issue. Do not just explain what needs to be done.\nMake the necessary code changes directly."""
+            self.logger.info(f"Directive Prompt:\n{directive_prompt}")
 
             stdout, stderr, exit_code, log_file = self._run_claude_command(
                 prompt=directive_prompt,
@@ -483,142 +426,39 @@ class ClaudeProxyEvaluator(BaseEvaluator):
 
             claude_patch = self._get_git_diff(test_repo)
             files_changed = self._get_changed_files(test_repo)
+            self.logger.info(f"patch:\n{claude_patch}")
+            self.logger.info(f"files changed: {files_changed}")
 
             success = exit_code == 0 and bool(claude_patch)
             execution_time = (datetime.now() - start_time).total_seconds()
 
             return {
-                "instance_id": data_point.instance_id,
-                "repo": data_point.repo,
-                "base_commit": data_point.base_commit,
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
                 "claude_patch": claude_patch,
                 "files_changed": files_changed,
                 "success": success,
                 "execution_time": execution_time,
                 "claude_log_file": log_file,
+                "stdout": stdout,
+                "stderr": stderr,
+                "exit_code": exit_code,
             }
-
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             self.logger.error(
                 f"Error processing {data_point.instance_id}: {e}", exc_info=True
             )
             return {
-                "instance_id": data_point.instance_id,
-                "repo": data_point.repo,
-                "base_commit": data_point.base_commit,
-                "stdout": "",
-                "stderr": str(e),
-                "exit_code": -1,
                 "claude_patch": "",
                 "files_changed": [],
                 "success": False,
                 "execution_time": execution_time,
                 "claude_log_file": None,
+                "stdout": "",
+                "stderr": str(e),
+                "exit_code": -1,
             }
-
         finally:
+            if stop_proxy:
+                self.stop_proxy()
             if test_repo and test_repo.exists():
                 shutil.rmtree(test_repo, ignore_errors=True)
-
-    # -------------------------------
-    # Convenience: evaluate wrapper re-using BaseEvaluator.evaluate signature
-    # -------------------------------
-    @weave.op
-    def evaluate_dataset(
-        self,
-        dataset: str | object,
-        max_data_points: Optional[int] = None,
-        start_proxy: bool = True,
-    ):
-        # load dataset if string
-        ds = (
-            load_dataset(dataset, split="train")
-            if isinstance(dataset, str)
-            else dataset
-        )
-        if max_data_points is not None:
-            ds = ds.select(range(min(max_data_points, len(ds))))
-
-        results = []
-        if start_proxy:
-            self.start_proxy()
-
-        try:
-            for sample in tqdm(ds, desc="Evaluating dataset", total=len(ds)):
-                data_point = CodingAgentDataPoint.model_validate(sample)
-                res = self.get_agent_response(data_point)
-                # executor integration: run provided executor on data_point if desired
-                try:
-                    exec_res = self.executor.execute(data_point)
-                    self.executor.cleanup()
-                except Exception:
-                    exec_res = None
-                results.append({"agent_result": res, "executor_result": exec_res})
-        finally:
-            if start_proxy:
-                self.stop_proxy()
-
-        return results
-
-
-def main():
-    import os
-
-    import datasets
-
-    from hecm.dataset_generation.schemas import CodingAgentDataPoint
-    from hecm.eval_harness.test_execution.base import BaseLocalExecutor
-
-    """Simple test entrypoint for ClaudeProxyEvaluator."""
-    # Initialize a local executor (or use your sandboxed one)
-    executor = BaseLocalExecutor()
-
-    # Instantiate evaluator
-    evaluator = ClaudeProxyEvaluator(
-        executor=executor,
-        anthropic_base_url="http://localhost:8082",
-        anthropic_api_key="dummy",
-        openai_base_url="http://127.0.0.1:8005/v1",
-        openai_api_key="dummy",
-        openai_model="Qwen/Qwen3-Coder-30B-A3B-Instruct",
-        log_dir="./logs",
-        debug=True,
-    )
-
-    # Start proxy manually (optional)
-    evaluator.start_proxy()
-
-    # Create a fake minimal CodingAgentDataPoint for testing
-    dataset = load_dataset("geekyrakshit/rust-dev", split="train")
-    data_point = CodingAgentDataPoint.model_validate(dataset[0])
-    # data_point = CodingAgentDataPoint(
-    #     instance_id="test_001",
-    #     repo="fuergaosi233/claude-code-proxy",
-    #     problem_statement="Fix a typo in the README file.",
-    #     base_commit="main",
-    #     patch="",
-    #     test_patch="",
-    #     hints_text="",
-    #     test_instructions="",
-    # )
-
-    # Run one test sample
-    result = evaluator.get_agent_response(data_point)
-
-    print("\n===== ClaudeProxyEvaluator Test Result =====")
-    for key, value in result.items():
-        if isinstance(value, str) and len(value) > 300:
-            print(f"{key}: {value[:300]}... [truncated]")
-        else:
-            print(f"{key}: {value}")
-
-    # Stop proxy after test
-    evaluator.stop_proxy()
-
-
-if __name__ == "__main__":
-    main()
