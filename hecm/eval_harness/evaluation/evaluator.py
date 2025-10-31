@@ -5,17 +5,22 @@ import rich
 from datasets import load_dataset
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
-from hecm.eval_harness.agent import ClaudeCodeProxyAgent
-from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
-from hecm.eval_harness.test_execution.juspay_hyperswitch import EvaluationResult
+from hecm.eval_harness.agent.base import BaseAgent
+from hecm.eval_harness.test_execution.base import BaseLocalExecutor, EvaluationResult
 
 
 class Evaluator:
-    def __init__(
-        self, agent: ClaudeCodeProxyAgent, executor: JuspayHyperswitchLocalTestExecutor
-    ):
-        self.agent: ClaudeCodeProxyAgent = agent
-        self.executor: JuspayHyperswitchLocalTestExecutor = executor
+    """
+    Evaluator class that evaluates the performance of the agent on the dataset.
+
+    Args:
+        agent: The agent to evaluate. Must implement the `get_agent_response` method.
+        executor: The executor to use for the evaluation. Must implement the `execute` method.
+    """
+
+    def __init__(self, agent: BaseAgent, executor: BaseLocalExecutor):
+        self.agent: BaseAgent = agent
+        self.executor: BaseLocalExecutor = executor
 
     def evaluate(
         self,
@@ -35,13 +40,11 @@ class Evaluator:
         evaluation_results: list[EvaluationResult] = []
         for idx, data_point in enumerate(dataset):
             data_point = CodingAgentDataPoint.model_validate(data_point)
-            # rich.print(
-            #     f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
-            # )
-            response = self.agent.get_agent_response(data_point)
-            evaluation_result = self.executor.execute(
-                data_point, response["claude_patch"]
+            rich.print(
+                f"[bold cyan]Evaluating data point {idx + 1}/{len(dataset)}[/bold cyan]"
             )
+            response = self.agent.get_agent_response(data_point)
+            evaluation_result = self.executor.execute(data_point, response.patch)
             evaluation_results.append(evaluation_result)
             rich.print(
                 f"[bold green]Data point {idx + 1}/{len(dataset)} evaluated successfully[/bold green]"

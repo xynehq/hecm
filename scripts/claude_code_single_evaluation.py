@@ -25,7 +25,7 @@ if __name__ == "__main__":
     )
     test_executor.execute(
         data_point,
-        predicted_patch=response["claude_patch"],
+        predicted_patch=response.patch,
         # result_save_path=f"./logs/results_{data_point.instance_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
         result_save_path="results.json",
     )

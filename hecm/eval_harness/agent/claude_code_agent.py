@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Dict, List
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
+from hecm.eval_harness.agent.base import AgentResponse, BaseAgent
 
 
-def setup_logging(log_dir: Path, debug: bool = False):
+def setup_logging(log_dir: Path, debug: bool = False) -> logging.Logger:
     """Setup logging configuration."""
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -47,7 +48,7 @@ def setup_logging(log_dir: Path, debug: bool = False):
     return logger
 
 
-class ClaudeCodeProxyAgent:
+class ClaudeCodeProxyAgent(BaseAgent):
     def __init__(
         self,
         proxy_repo_path: str | os.PathLike | None = None,
@@ -64,7 +65,10 @@ class ClaudeCodeProxyAgent:
         proxy_startup_wait: int = 5,
         log_dir: str | os.PathLike | None = None,
         debug: bool = False,
+        *args,
+        **kwargs,
     ):
+        super().__init__(*args, **kwargs)
         if proxy_repo_path is None:
             self.proxy_repo_path = Path(tempfile.gettempdir()) / "claude-code-proxy"
         else:
@@ -403,7 +407,7 @@ class ClaudeCodeProxyAgent:
         data_point: CodingAgentDataPoint,
         start_proxy: bool = True,
         stop_proxy: bool = True,
-    ) -> str:
+    ) -> AgentResponse:
         start_time = datetime.now()
         test_repo = None
         try:
@@ -432,31 +436,31 @@ class ClaudeCodeProxyAgent:
             success = exit_code == 0 and bool(claude_patch)
             execution_time = (datetime.now() - start_time).total_seconds()
 
-            return {
-                "claude_patch": claude_patch,
-                "files_changed": files_changed,
-                "success": success,
-                "execution_time": execution_time,
-                "claude_log_file": log_file,
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
-            }
+            return AgentResponse(
+                patch=claude_patch,
+                files_changed=files_changed,
+                success=success,
+                execution_time=execution_time,
+                log_file=log_file,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+            )
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             self.logger.error(
                 f"Error processing {data_point.instance_id}: {e}", exc_info=True
             )
-            return {
-                "claude_patch": "",
-                "files_changed": [],
-                "success": False,
-                "execution_time": execution_time,
-                "claude_log_file": None,
-                "stdout": "",
-                "stderr": str(e),
-                "exit_code": -1,
-            }
+            return AgentResponse(
+                patch="",
+                files_changed=[],
+                success=False,
+                execution_time=execution_time,
+                log_file=None,
+                stdout="",
+                stderr=str(e),
+                exit_code=-1,
+            )
         finally:
             if stop_proxy:
                 self.stop_proxy()

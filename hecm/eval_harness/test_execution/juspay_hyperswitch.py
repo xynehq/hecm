@@ -5,7 +5,6 @@ import time
 from tempfile import TemporaryDirectory
 
 import rich
-from pydantic import BaseModel
 
 from hecm.dataset_generation.schemas import CodingAgentDataPoint
 from hecm.eval_harness.test_execution.base import (
@@ -27,13 +26,13 @@ class JuspayHyperswitchLocalTestExecutor(BaseLocalExecutor):
         *args,
         **kwargs,
     ):
+        super().__init__(*args, **kwargs)
         self.environment = environment
         self.cypress_test_suffix = cypress_test_suffix
         self.health_check_url = health_check_url
         self.health_check_timeout = health_check_timeout
         self.health_check_interval = health_check_interval
         self.command_results: list[CommandExecutionResult] = []
-        super().__init__(*args, **kwargs)
 
     def clone_repository(self, data_point: CodingAgentDataPoint, repo_dir: str):
         command_results = execute_multiple_commands(
