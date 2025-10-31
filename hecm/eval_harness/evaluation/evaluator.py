@@ -13,6 +13,24 @@ class Evaluator:
     """
     Evaluator class that evaluates the performance of the agent on the dataset.
 
+    !!! example
+        ```python
+        from hecm.eval_harness.agent import ClaudeCodeProxyAgent
+        from hecm.eval_harness.evaluation import Evaluator
+        from hecm.eval_harness.test_execution import JuspayHyperswitchLocalTestExecutor
+
+        evaluator = Evaluator(
+            agent=ClaudeCodeProxyAgent(),
+            executor=JuspayHyperswitchLocalTestExecutor(),
+        )
+        evaluator.evaluate(
+            dataset="juspay/hyperswitch",
+            split="train",
+            max_data_points=8,
+            result_save_path="results2.json",
+        )
+        ```
+
     Args:
         agent: The agent to evaluate. Must implement the `get_agent_response` method.
         executor: The executor to use for the evaluation. Must implement the `execute` method.
