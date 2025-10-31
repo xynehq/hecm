@@ -29,6 +29,17 @@ class Evaluator:
         max_data_points: int = None,
         result_save_path: os.PathLike | None = None,
     ):
+        """Evaluate the agent on the dataset.
+
+        Args:
+            dataset (str): The dataset to evaluate on.
+            split (str): The split of the dataset to evaluate on.
+            max_data_points (int): The maximum number of data points to evaluate on.
+            result_save_path (os.PathLike | None): The path to save the evaluation results.
+
+        Returns:
+            list[EvaluationResult]: The evaluation results.
+        """
         dataset = (
             load_dataset(dataset, split=split) if isinstance(dataset, str) else dataset
         )

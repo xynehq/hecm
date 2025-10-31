@@ -9,6 +9,16 @@ from hecm.dataset_generation.schemas import CodingAgentDataPoint
 
 
 class CommandExecutionResult(BaseModel):
+    """
+    Result of executing a command.
+
+    Attributes:
+        command (str): The command that was executed.
+        stdout (str): The stdout of the command.
+        stderror (str): The stderr of the command.
+        exit_code (int): The exit code of the command.
+    """
+
     command: str
     stdout: str
     stderror: str
@@ -16,6 +26,17 @@ class CommandExecutionResult(BaseModel):
 
 
 class EvaluationResult(BaseModel):
+    """
+    Result of evaluating a data point.
+
+    Attributes:
+        total_score (int): The total score of the data point.
+        command_results (list[CommandExecutionResult]): The results of executing the commands.
+        docker_compose_up_success (bool): Whether the docker compose up was successful.
+        cypress_tests_success (bool): Whether the cypress tests were successful.
+        cargo_test_success (bool): Whether the cargo test was successful.
+    """
+
     total_score: int
     command_results: list[CommandExecutionResult]
     docker_compose_up_success: bool = False
@@ -26,6 +47,18 @@ class EvaluationResult(BaseModel):
 def execute_multiple_commands(
     commands: list[str], environment: dict[str, str]
 ) -> list[CommandExecutionResult]:
+    """Execute multiple commands sequentially.
+
+    Args:
+        commands (list[str]): The commands to execute.
+        environment (dict[str, str]): The environment variables to use for the commands.
+
+    Returns:
+        list[CommandExecutionResult]: The results of executing the commands.
+
+    Raises:
+        Exception: If the commands cannot be executed.
+    """
     command_results: list[CommandExecutionResult] = []
     for command in commands:
         rich.print(f"[yellow]Executing command: {command}[/yellow]")
